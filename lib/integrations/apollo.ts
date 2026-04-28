@@ -1,0 +1,45 @@
+import axios from "axios";
+
+const APOLLO_API_KEY = process.env.APOLLO_API_KEY!;
+const APOLLO_BASE_URL = "https://api.apollo.io/v1";
+
+export interface ApolloSearchParams {
+  query?: string;
+  titles?: string[];
+  companies?: string[];
+  limit?: number;
+}
+
+export interface ApolloPerson {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  title?: string;
+  organization?: { name: string };
+  linkedin_url?: string;
+}
+
+export async function searchPeople(
+  params: ApolloSearchParams
+): Promise<ApolloPerson[]> {
+  const response = await axios.post(
+    `${APOLLO_BASE_URL}/mixed_people/search`,
+    {
+      api_key: APOLLO_API_KEY,
+      q_keywords: params.query,
+      person_titles: params.titles,
+      q_organization_name: params.companies?.join(","),
+      per_page: params.limit ?? 25,
+    }
+  );
+  return response.data.people ?? [];
+}
+
+export async function enrichPerson(email: string): Promise<ApolloPerson | null> {
+  const response = await axios.post(`${APOLLO_BASE_URL}/people/match`, {
+    api_key: APOLLO_API_KEY,
+    email,
+  });
+  return response.data.person ?? null;
+}
