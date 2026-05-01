@@ -9,6 +9,23 @@ alter table public.leads
 alter table public.leads
   drop constraint if exists leads_status_check;
 
+update public.leads
+set status = 'new'
+where status not in (
+  'new',
+  'researching',
+  'scripted',
+  'photo_needed',
+  'photo_ready',
+  'prompt_ready',
+  'video_generating',
+  'video_ready',
+  'approved',
+  'emailed',
+  'responded',
+  'failed'
+);
+
 alter table public.leads
   add constraint leads_status_check check (
     status in (
