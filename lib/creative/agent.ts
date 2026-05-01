@@ -1,7 +1,7 @@
-import axios from "axios";
+import Anthropic from "@anthropic-ai/sdk";
 import type { Campaign, CreativeBrief, CreativeScenePlan, Lead } from "../types";
 
-const PERPLEXITY_BASE_URL = "https://api.perplexity.ai/chat/completions";
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function parseJsonObject(text: string): unknown {
   const match = text.match(/\{[\s\S]*\}/);
@@ -106,7 +106,7 @@ export async function generateCreativeBrief(
   leadResearchSummary: string;
   creativeBrief: CreativeBrief;
 }> {
-  if (!process.env.PERPLEXITY_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return fallbackBrief(campaign, lead);
   }
 
@@ -166,20 +166,13 @@ Rules:
 - Do not make the lead speak. The narrator speaks to the lead.
 - Higgsfield prompts must be visually specific, premium, realistic, and silent.`;
 
-  const response = await axios.post(
-    PERPLEXITY_BASE_URL,
-    {
-      model: "sonar",
-      messages: [{ role: "user", content: prompt }],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const response = await anthropic.messages.create({
+    model: process.env.ANTHROPIC_MODEL ?? "claude-3-5-sonnet-latest",
+    max_tokens: 2200,
+    temperature: 0.7,
+    messages: [{ role: "user", content: prompt }],
+  });
 
-  const text: string = response.data?.choices?.[0]?.message?.content ?? "";
+  const text = response.content.find((block) => block.type === "text")?.text ?? "";
   return normalizeBrief(parseJsonObject(text));
 }
