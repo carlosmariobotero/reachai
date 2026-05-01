@@ -47,8 +47,12 @@ export type LeadStatus =
   | "new"
   | "researching"
   | "scripted"
+  | "photo_needed"
+  | "photo_ready"
+  | "prompt_ready"
   | "video_generating"
   | "video_ready"
+  | "approved"
   | "emailed"
   | "responded"
   | "failed";
@@ -63,12 +67,13 @@ export interface Lead {
   title?: string;
   linkedinUrl?: string;
   location?: string;
+  profilePhotoUrl?: string;
   status: LeadStatus;
   researchSummary?: string;
   videoScript?: string;
   outreachMessage?: string;
   videoUrl?: string;
-  heygenVideoId?: string;
+  videoJobId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,7 +82,7 @@ export interface VideoOutreach {
   id: string;
   leadId: string;
   campaignId: string;
-  heygenVideoId?: string;
+  videoJobId?: string;
   status: "pending" | "generating" | "ready" | "sent" | "failed";
   videoUrl?: string;
   personalizedScript?: string;
@@ -120,12 +125,13 @@ export interface LeadRow {
   title: string | null;
   linkedin_url: string | null;
   location: string | null;
+  profile_photo_url: string | null;
   status: LeadStatus;
   research_summary: string | null;
   video_script: string | null;
   outreach_message: string | null;
   video_url: string | null;
-  heygen_video_id: string | null;
+  video_job_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -156,6 +162,113 @@ export interface CreateLeadInput {
   title?: string;
   linkedinUrl?: string;
   location?: string;
+}
+
+export type CreativeVideoStatus =
+  | "draft"
+  | "research_ready"
+  | "prompt_ready"
+  | "scenes_queued"
+  | "scenes_ready"
+  | "voiceover_ready"
+  | "render_ready"
+  | "approved"
+  | "failed";
+
+export type CreativeSceneStatus =
+  | "draft"
+  | "queued"
+  | "generating"
+  | "ready"
+  | "failed";
+
+export interface CreativeScenePlan {
+  sceneNumber: number;
+  durationSeconds: number;
+  objective: string;
+  higgsfieldPrompt: string;
+  captionText: string;
+}
+
+export interface CreativeBrief {
+  salesAngle: string;
+  voiceoverScript: string;
+  outreachMessage: string;
+  scenePlan: CreativeScenePlan[];
+}
+
+export interface CreativeVideoJob {
+  id: string;
+  leadId: string;
+  campaignId: string;
+  status: CreativeVideoStatus;
+  clientResearchSummary?: string;
+  leadResearchSummary?: string;
+  salesAngle?: string;
+  voiceoverScript?: string;
+  outreachMessage?: string;
+  creativeBrief?: CreativeBrief;
+  voiceoverUrl?: string;
+  hyperframesCompositionUrl?: string;
+  finalVideoUrl?: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreativeVideoScene {
+  id: string;
+  creativeVideoJobId: string;
+  leadId: string;
+  sceneNumber: number;
+  durationSeconds: number;
+  objective: string;
+  higgsfieldPrompt: string;
+  captionText: string;
+  status: CreativeSceneStatus;
+  higgsfieldRequestId?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreativeVideoJobRow {
+  id: string;
+  lead_id: string;
+  campaign_id: string;
+  status: CreativeVideoStatus;
+  client_research_summary: string | null;
+  lead_research_summary: string | null;
+  sales_angle: string | null;
+  voiceover_script: string | null;
+  outreach_message: string | null;
+  creative_brief: CreativeBrief | null;
+  voiceover_url: string | null;
+  hyperframes_composition_url: string | null;
+  final_video_url: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreativeVideoSceneRow {
+  id: string;
+  creative_video_job_id: string;
+  lead_id: string;
+  scene_number: number;
+  duration_seconds: number;
+  objective: string;
+  higgsfield_prompt: string;
+  caption_text: string;
+  status: CreativeSceneStatus;
+  higgsfield_request_id: string | null;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ─── Agent types ─────────────────────────────────────────────────────────────

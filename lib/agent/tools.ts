@@ -6,15 +6,12 @@ import {
   createLead,
   saveLeadResearch,
   saveLeadScript,
-  saveLeadVideo,
   updateLeadStatus,
   updateCampaignStatus,
 } from "../integrations/supabase";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -89,19 +86,6 @@ export const agentTools: Anthropic.Tool[] = [
         "pain_point",
         "client_name",
       ],
-    },
-  },
-  {
-    name: "generate_video",
-    description:
-      "Submit a HeyGen video generation job and poll until complete, then save the URL to Supabase.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        lead_id: { type: "string" },
-        video_script: { type: "string" },
-      },
-      required: ["lead_id", "video_script"],
     },
   },
   {
@@ -275,65 +259,6 @@ Return ONLY valid JSON with two keys:
   return { success: true, data: { video_script: videoScript, outreach_message: outreachMessage } };
 }
 
-async function generateVideo(input: Record<string, unknown>): Promise<AgentToolResult> {
-  const leadId = input.lead_id as string;
-  const videoScript = input.video_script as string;
-  const avatarId = process.env.HEYGEN_AVATAR_ID!;
-
-  const genResponse = await axios.post(
-    "https://api.heygen.com/v2/video/generate",
-    {
-      video_inputs: [
-        {
-          character: { type: "avatar", avatar_id: avatarId },
-          voice: {
-            type: "text",
-            input_text: videoScript,
-            voice_id: "2d5b0e6cf36f460aa7fc47e3eee4ba54",
-          },
-        },
-      ],
-      dimension: { width: 1280, height: 720 },
-    },
-    {
-      headers: {
-        "X-Api-Key": process.env.HEYGEN_API_KEY!,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-
-  const videoId: string = genResponse.data?.data?.video_id ?? "";
-  if (!videoId) throw new Error("HeyGen did not return a video_id");
-
-  await updateLeadStatus(leadId, "video_generating");
-
-  for (let attempt = 0; attempt < 30; attempt++) {
-    await sleep(20_000);
-
-    const statusResponse = await axios.get(
-      `https://api.heygen.com/v1/video_status.get?video_id=${videoId}`,
-      {
-        headers: { "X-Api-Key": process.env.HEYGEN_API_KEY! },
-      }
-    );
-
-    const videoStatus: string = statusResponse.data?.data?.status ?? "";
-    const videoUrl: string = statusResponse.data?.data?.video_url ?? "";
-
-    if (videoStatus === "completed" && videoUrl) {
-      await saveLeadVideo(leadId, videoUrl, videoId);
-      return { success: true, data: { video_id: videoId, video_url: videoUrl } };
-    }
-
-    if (videoStatus === "failed") {
-      throw new Error(`HeyGen video ${videoId} failed`);
-    }
-  }
-
-  throw new Error(`HeyGen video ${videoId} timed out after 10 minutes`);
-}
-
 async function deliverLead(input: Record<string, unknown>): Promise<AgentToolResult> {
   const leadId = input.lead_id as string;
   const firstName = input.first_name as string;
@@ -395,8 +320,6 @@ export async function executeTool(
         return await researchLead(toolInput);
       case "generate_script":
         return await generateScript(toolInput);
-      case "generate_video":
-        return await generateVideo(toolInput);
       case "deliver_lead":
         return await deliverLead(toolInput);
       case "update_campaign_progress":

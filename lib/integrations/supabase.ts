@@ -4,6 +4,13 @@ import type {
   CampaignRow,
   CampaignStats,
   CampaignStatus,
+  CreativeBrief,
+  CreativeScenePlan,
+  CreativeVideoJob,
+  CreativeVideoJobRow,
+  CreativeVideoScene,
+  CreativeVideoSceneRow,
+  CreativeVideoStatus,
   CreateCampaignInput,
   CreateLeadInput,
   Lead,
@@ -64,12 +71,54 @@ function rowToLead(row: LeadRow): Lead {
     title: row.title ?? undefined,
     linkedinUrl: row.linkedin_url ?? undefined,
     location: row.location ?? undefined,
+    profilePhotoUrl: row.profile_photo_url ?? undefined,
     status: row.status,
     researchSummary: row.research_summary ?? undefined,
     videoScript: row.video_script ?? undefined,
     outreachMessage: row.outreach_message ?? undefined,
     videoUrl: row.video_url ?? undefined,
-    heygenVideoId: row.heygen_video_id ?? undefined,
+    videoJobId: row.video_job_id ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToCreativeJob(row: CreativeVideoJobRow): CreativeVideoJob {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    campaignId: row.campaign_id,
+    status: row.status,
+    clientResearchSummary: row.client_research_summary ?? undefined,
+    leadResearchSummary: row.lead_research_summary ?? undefined,
+    salesAngle: row.sales_angle ?? undefined,
+    voiceoverScript: row.voiceover_script ?? undefined,
+    outreachMessage: row.outreach_message ?? undefined,
+    creativeBrief: row.creative_brief ?? undefined,
+    voiceoverUrl: row.voiceover_url ?? undefined,
+    hyperframesCompositionUrl: row.hyperframes_composition_url ?? undefined,
+    finalVideoUrl: row.final_video_url ?? undefined,
+    approvedAt: row.approved_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToCreativeScene(row: CreativeVideoSceneRow): CreativeVideoScene {
+  return {
+    id: row.id,
+    creativeVideoJobId: row.creative_video_job_id,
+    leadId: row.lead_id,
+    sceneNumber: row.scene_number,
+    durationSeconds: row.duration_seconds,
+    objective: row.objective,
+    higgsfieldPrompt: row.higgsfield_prompt,
+    captionText: row.caption_text,
+    status: row.status,
+    higgsfieldRequestId: row.higgsfield_request_id ?? undefined,
+    videoUrl: row.video_url ?? undefined,
+    thumbnailUrl: row.thumbnail_url ?? undefined,
+    errorMessage: row.error_message ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -197,6 +246,20 @@ export async function getLeadsByCampaign(campaignId: string): Promise<Lead[]> {
   return (rows ?? []).map(rowToLead);
 }
 
+export async function getLead(id: string): Promise<Lead | null> {
+  const { data: row, error } = await supabaseAdmin
+    .from("leads")
+    .select("*")
+    .eq("id", id)
+    .single<LeadRow>();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`getLead: ${error.message}`);
+  }
+  return rowToLead(row);
+}
+
 export async function updateLeadStatus(
   id: string,
   status: LeadStatus
@@ -231,6 +294,25 @@ export async function saveLeadResearch(
   return rowToLead(row);
 }
 
+export async function saveLeadProfilePhoto(
+  id: string,
+  profilePhotoUrl: string
+): Promise<Lead> {
+  const { data: row, error } = await supabaseAdmin
+    .from("leads")
+    .update({
+      profile_photo_url: profilePhotoUrl,
+      status: "photo_ready" as LeadStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single<LeadRow>();
+
+  if (error) throw new Error(`saveLeadProfilePhoto: ${error.message}`);
+  return rowToLead(row);
+}
+
 export async function saveLeadScript(
   id: string,
   videoScript: string,
@@ -255,13 +337,13 @@ export async function saveLeadScript(
 export async function saveLeadVideo(
   id: string,
   videoUrl: string,
-  heygenVideoId: string
+  videoJobId: string
 ): Promise<Lead> {
   const { data: row, error } = await supabaseAdmin
     .from("leads")
     .update({
       video_url: videoUrl,
-      heygen_video_id: heygenVideoId,
+      video_job_id: videoJobId,
       status: "video_ready" as LeadStatus,
       updated_at: new Date().toISOString(),
     })
@@ -271,4 +353,199 @@ export async function saveLeadVideo(
 
   if (error) throw new Error(`saveLeadVideo: ${error.message}`);
   return rowToLead(row);
+}
+
+// ─── Creative video jobs ─────────────────────────────────────────────────────
+
+export async function getCreativeVideoJob(
+  leadId: string
+): Promise<CreativeVideoJob | null> {
+  const { data: row, error } = await supabaseAdmin
+    .from("creative_video_jobs")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<CreativeVideoJobRow>();
+
+  if (error) throw new Error(`getCreativeVideoJob: ${error.message}`);
+  return row ? rowToCreativeJob(row) : null;
+}
+
+export async function getCreativeVideoScenes(
+  leadId: string
+): Promise<CreativeVideoScene[]> {
+  const { data: rows, error } = await supabaseAdmin
+    .from("creative_video_scenes")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("scene_number", { ascending: true })
+    .returns<CreativeVideoSceneRow[]>();
+
+  if (error) throw new Error(`getCreativeVideoScenes: ${error.message}`);
+  return (rows ?? []).map(rowToCreativeScene);
+}
+
+export async function createOrUpdateCreativeVideoJob(input: {
+  leadId: string;
+  campaignId: string;
+  status: CreativeVideoStatus;
+  clientResearchSummary?: string;
+  leadResearchSummary?: string;
+  salesAngle?: string;
+  voiceoverScript?: string;
+  outreachMessage?: string;
+  creativeBrief?: CreativeBrief;
+  voiceoverUrl?: string;
+  hyperframesCompositionUrl?: string;
+  finalVideoUrl?: string;
+  approvedAt?: string | null;
+}): Promise<CreativeVideoJob> {
+  const existing = await getCreativeVideoJob(input.leadId);
+  const values: Partial<CreativeVideoJobRow> = {
+    lead_id: input.leadId,
+    campaign_id: input.campaignId,
+    status: input.status,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.clientResearchSummary !== undefined) {
+    values.client_research_summary = input.clientResearchSummary;
+  }
+  if (input.leadResearchSummary !== undefined) {
+    values.lead_research_summary = input.leadResearchSummary;
+  }
+  if (input.salesAngle !== undefined) values.sales_angle = input.salesAngle;
+  if (input.voiceoverScript !== undefined) {
+    values.voiceover_script = input.voiceoverScript;
+  }
+  if (input.outreachMessage !== undefined) {
+    values.outreach_message = input.outreachMessage;
+  }
+  if (input.creativeBrief !== undefined) values.creative_brief = input.creativeBrief;
+  if (input.voiceoverUrl !== undefined) values.voiceover_url = input.voiceoverUrl;
+  if (input.hyperframesCompositionUrl !== undefined) {
+    values.hyperframes_composition_url = input.hyperframesCompositionUrl;
+  }
+  if (input.finalVideoUrl !== undefined) values.final_video_url = input.finalVideoUrl;
+  if (input.approvedAt !== undefined) values.approved_at = input.approvedAt;
+
+  const query = existing
+    ? supabaseAdmin
+        .from("creative_video_jobs")
+        .update(values)
+        .eq("id", existing.id)
+        .select()
+        .single<CreativeVideoJobRow>()
+    : supabaseAdmin
+        .from("creative_video_jobs")
+        .insert(values)
+        .select()
+        .single<CreativeVideoJobRow>();
+
+  const { data: row, error } = await query;
+  if (error) throw new Error(`createOrUpdateCreativeVideoJob: ${error.message}`);
+  return rowToCreativeJob(row);
+}
+
+export async function replaceCreativeVideoScenes(
+  jobId: string,
+  leadId: string,
+  scenePlan: CreativeScenePlan[]
+): Promise<CreativeVideoScene[]> {
+  const { error: deleteError } = await supabaseAdmin
+    .from("creative_video_scenes")
+    .delete()
+    .eq("creative_video_job_id", jobId);
+
+  if (deleteError) {
+    throw new Error(`replaceCreativeVideoScenes delete: ${deleteError.message}`);
+  }
+
+  const rows = scenePlan.map((scene) => ({
+    creative_video_job_id: jobId,
+    lead_id: leadId,
+    scene_number: scene.sceneNumber,
+    duration_seconds: scene.durationSeconds,
+    objective: scene.objective,
+    higgsfield_prompt: scene.higgsfieldPrompt,
+    caption_text: scene.captionText,
+    status: "draft" as const,
+  }));
+
+  const { data, error } = await supabaseAdmin
+    .from("creative_video_scenes")
+    .insert(rows)
+    .select()
+    .returns<CreativeVideoSceneRow[]>();
+
+  if (error) throw new Error(`replaceCreativeVideoScenes insert: ${error.message}`);
+  return (data ?? []).map(rowToCreativeScene);
+}
+
+export async function queueCreativeVideoScenes(
+  leadId: string
+): Promise<CreativeVideoScene[]> {
+  const { data, error } = await supabaseAdmin
+    .from("creative_video_scenes")
+    .update({ status: "queued", updated_at: new Date().toISOString() })
+    .eq("lead_id", leadId)
+    .in("status", ["draft", "failed"])
+    .select()
+    .returns<CreativeVideoSceneRow[]>();
+
+  if (error) throw new Error(`queueCreativeVideoScenes: ${error.message}`);
+  return (data ?? []).map(rowToCreativeScene);
+}
+
+export async function updateCreativeVideoScene(
+  sceneId: string,
+  updates: {
+    status?: CreativeVideoScene["status"];
+    higgsfieldRequestId?: string;
+    videoUrl?: string;
+    thumbnailUrl?: string;
+    errorMessage?: string | null;
+  }
+): Promise<CreativeVideoScene> {
+  const values: Partial<CreativeVideoSceneRow> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.status !== undefined) values.status = updates.status;
+  if (updates.higgsfieldRequestId !== undefined) {
+    values.higgsfield_request_id = updates.higgsfieldRequestId;
+  }
+  if (updates.videoUrl !== undefined) values.video_url = updates.videoUrl;
+  if (updates.thumbnailUrl !== undefined) values.thumbnail_url = updates.thumbnailUrl;
+  if (updates.errorMessage !== undefined) values.error_message = updates.errorMessage;
+
+  const { data: row, error } = await supabaseAdmin
+    .from("creative_video_scenes")
+    .update(values)
+    .eq("id", sceneId)
+    .select()
+    .single<CreativeVideoSceneRow>();
+
+  if (error) throw new Error(`updateCreativeVideoScene: ${error.message}`);
+  return rowToCreativeScene(row);
+}
+
+export async function uploadAsset(input: {
+  bucket: string;
+  path: string;
+  body: ArrayBuffer | Blob | Buffer | string;
+  contentType: string;
+}): Promise<string> {
+  const { error } = await supabaseAdmin.storage
+    .from(input.bucket)
+    .upload(input.path, input.body, {
+      contentType: input.contentType,
+      upsert: true,
+    });
+
+  if (error) throw new Error(`uploadAsset: ${error.message}`);
+
+  const { data } = supabaseAdmin.storage.from(input.bucket).getPublicUrl(input.path);
+  return data.publicUrl;
 }

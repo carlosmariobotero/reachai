@@ -136,6 +136,7 @@ interface DashCampaign {
 }
 
 interface DashLead {
+  id: string;
   name: string;
   title: string;
   company: string;
@@ -160,8 +161,12 @@ const LEAD_STATUS_MAP: Record<string, string> = {
   new: "scraped",
   researching: "researched",
   scripted: "researched",
+  photo_needed: "scraped",
+  photo_ready: "researched",
+  prompt_ready: "researched",
   video_generating: "video_ready",
   video_ready: "video_ready",
+  approved: "video_ready",
   emailed: "delivered",
   responded: "delivered",
   failed: "scraped",
@@ -188,6 +193,7 @@ function mapCampaign(c: ApiCampaign, index: number): DashCampaign {
 
 function mapLead(l: ApiLead): DashLead {
   return {
+    id: l.id,
     name: `${l.firstName} ${l.lastName}`,
     title: l.title ?? "",
     company: l.company ?? "",
@@ -519,7 +525,7 @@ export default function Dashboard() {
                         {lead.video ? (
                           <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px", borderColor: `${G}44`, color: G }}>▶ View</button>
                         ) : (
-                          <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px" }}>Generate</button>
+                          <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px" }} onClick={(e) => { e.stopPropagation(); window.location.href = `/creative/${lead.id}`; }}>Creative</button>
                         )}
                       </div>
                     </div>
@@ -536,7 +542,7 @@ export default function Dashboard() {
             activity: { title: "Activity", sub: "Live feed of what the AI agent is doing — scraping leads, running research, generating scripts and videos across all campaigns." },
             review:   { title: "Review", sub: "Videos queued for your approval. Preview each one, approve to send, or trigger a regeneration before anything goes out." },
             outbox:   { title: "Outbox", sub: "Everything that's been sent — platform, timestamp, open status, and replies. Your real-time ROI view." },
-            settings: { title: "Settings", sub: "API keys, HeyGen avatar config, email sender setup, and outreach templates." },
+            settings: { title: "Settings", sub: "API keys, Higgsfield MCP worker config, ElevenLabs voice setup, email sender setup, and outreach templates." },
           };
           const d = descriptions[nav];
           return (
