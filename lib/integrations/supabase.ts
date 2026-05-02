@@ -115,6 +115,10 @@ function rowToCreativeScene(row: CreativeVideoSceneRow): CreativeVideoScene {
     higgsfieldPrompt: row.higgsfield_prompt,
     captionText: row.caption_text,
     status: row.status,
+    higgsfieldMediaId: row.higgsfield_media_id ?? undefined,
+    stillImageJobId: row.still_image_job_id ?? undefined,
+    stillImageUrl: row.still_image_url ?? undefined,
+    videoJobId: row.video_job_id ?? undefined,
     higgsfieldRequestId: row.higgsfield_request_id ?? undefined,
     videoUrl: row.video_url ?? undefined,
     thumbnailUrl: row.thumbnail_url ?? undefined,
@@ -502,6 +506,10 @@ export async function updateCreativeVideoScene(
   sceneId: string,
   updates: {
     status?: CreativeVideoScene["status"];
+    higgsfieldMediaId?: string;
+    stillImageJobId?: string;
+    stillImageUrl?: string;
+    videoJobId?: string;
     higgsfieldRequestId?: string;
     videoUrl?: string;
     thumbnailUrl?: string;
@@ -513,6 +521,16 @@ export async function updateCreativeVideoScene(
   };
 
   if (updates.status !== undefined) values.status = updates.status;
+  if (updates.higgsfieldMediaId !== undefined) {
+    values.higgsfield_media_id = updates.higgsfieldMediaId;
+  }
+  if (updates.stillImageJobId !== undefined) {
+    values.still_image_job_id = updates.stillImageJobId;
+  }
+  if (updates.stillImageUrl !== undefined) {
+    values.still_image_url = updates.stillImageUrl;
+  }
+  if (updates.videoJobId !== undefined) values.video_job_id = updates.videoJobId;
   if (updates.higgsfieldRequestId !== undefined) {
     values.higgsfield_request_id = updates.higgsfieldRequestId;
   }

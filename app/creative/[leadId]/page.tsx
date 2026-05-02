@@ -42,6 +42,10 @@ type Scene = {
   higgsfieldPrompt: string;
   captionText: string;
   status: string;
+  higgsfieldMediaId?: string;
+  stillImageJobId?: string;
+  stillImageUrl?: string;
+  videoJobId?: string;
   higgsfieldRequestId?: string;
   videoUrl?: string;
 };
@@ -51,6 +55,14 @@ type CreativeResponse = {
   campaign: Campaign;
   job: Job | null;
   scenes: Scene[];
+};
+
+type SceneInput = {
+  higgsfieldMediaId: string;
+  stillImageJobId: string;
+  stillImageUrl: string;
+  videoJobId: string;
+  videoUrl: string;
 };
 
 const css = `
@@ -75,7 +87,7 @@ export default function CreativeLeadPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [sceneInputs, setSceneInputs] = useState<Record<string, { requestId: string; videoUrl: string }>>({});
+  const [sceneInputs, setSceneInputs] = useState<Record<string, SceneInput>>({});
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
 
   const load = useCallback(async () => {
@@ -102,7 +114,7 @@ export default function CreativeLeadPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Request failed");
       if (json.mcpTasks) {
-        setMessage(`Queued ${json.mcpTasks.length} Higgsfield MCP tasks. Use the task payloads from the network response or API response to run the MCP worker.`);
+        setMessage(`Prepared ${json.mcpTasks.length} Higgsfield MCP tasks. For each scene: upload the lead photo, create a GPT Image 2 still, approve likeness, then animate the still.`);
       } else if (json.renderInstructions) {
         setMessage(json.renderInstructions);
       } else {
@@ -120,6 +132,45 @@ export default function CreativeLeadPage() {
     () => data?.scenes.filter((scene) => scene.videoUrl).length ?? 0,
     [data?.scenes]
   );
+
+  const getSceneInput = (scene: Scene): SceneInput => (
+    sceneInputs[scene.id] ?? {
+      higgsfieldMediaId: scene.higgsfieldMediaId ?? "",
+      stillImageJobId: scene.stillImageJobId ?? "",
+      stillImageUrl: scene.stillImageUrl ?? "",
+      videoJobId: scene.videoJobId ?? scene.higgsfieldRequestId ?? "",
+      videoUrl: scene.videoUrl ?? "",
+    }
+  );
+
+  const setSceneInputValue = (scene: Scene, key: keyof SceneInput, value: string) => {
+    setSceneInputs((prev) => ({
+      ...prev,
+      [scene.id]: {
+        ...getSceneInput(scene),
+        ...prev[scene.id],
+        [key]: value,
+      },
+    }));
+  };
+
+  const saveScene = async (scene: Scene) => {
+    const values = getSceneInput(scene);
+    await fetch(`/api/leads/${leadId}/creative/scenes/${scene.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: values.videoUrl ? "ready" : values.stillImageUrl ? "generating" : "queued",
+        higgsfieldMediaId: values.higgsfieldMediaId || undefined,
+        stillImageJobId: values.stillImageJobId || undefined,
+        stillImageUrl: values.stillImageUrl || undefined,
+        videoJobId: values.videoJobId || undefined,
+        higgsfieldRequestId: values.videoJobId || undefined,
+        videoUrl: values.videoUrl || undefined,
+      }),
+    });
+    await load();
+  };
 
   if (loading) {
     return (
@@ -203,9 +254,9 @@ export default function CreativeLeadPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", marginBottom: "14px" }}>
               <div>
                 <p className="mono muted" style={{ fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase" }}>Higgsfield Scenes</p>
-                <p className="muted" style={{ fontSize: "13px", margin: 0 }}>{readyScenes} / 3 scene videos ready</p>
+                <p className="muted" style={{ fontSize: "13px", margin: 0 }}>{readyScenes} / 3 animated scene videos ready</p>
               </div>
-              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>{busy === "scenes" ? "Queueing..." : "Queue MCP Tasks"}</button>
+              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>{busy === "scenes" ? "Preparing..." : "Prepare MCP Tasks"}</button>
             </div>
 
             <div style={{ display: "grid", gap: "12px" }}>
@@ -217,26 +268,22 @@ export default function CreativeLeadPage() {
                   </div>
                   <p className="muted" style={{ fontSize: "12px", lineHeight: 1.5 }}>{scene.higgsfieldPrompt}</p>
                   <p style={{ fontSize: "13px", color: "#BEFF00" }}>{scene.captionText}</p>
+                  {scene.stillImageUrl && (
+                    <img src={scene.stillImageUrl} alt={`Scene ${scene.sceneNumber} still`} style={{ width: "100%", borderRadius: "4px", marginBottom: "10px", border: "1px solid #181818" }} />
+                  )}
                   {scene.videoUrl && <video src={scene.videoUrl} muted controls style={{ width: "100%", borderRadius: "4px", marginBottom: "10px" }} />}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "8px" }}>
-                    <input className="input" placeholder="Higgsfield request id" value={sceneInputs[scene.id]?.requestId ?? scene.higgsfieldRequestId ?? ""} onChange={(e) => setSceneInputs((prev) => ({ ...prev, [scene.id]: { requestId: e.target.value, videoUrl: prev[scene.id]?.videoUrl ?? scene.videoUrl ?? "" } }))} />
-                    <input className="input" placeholder="Scene video URL" value={sceneInputs[scene.id]?.videoUrl ?? scene.videoUrl ?? ""} onChange={(e) => setSceneInputs((prev) => ({ ...prev, [scene.id]: { requestId: prev[scene.id]?.requestId ?? scene.higgsfieldRequestId ?? "", videoUrl: e.target.value } }))} />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr)) auto", gap: "8px" }}>
+                    <input className="input" placeholder="Higgsfield media ID" value={getSceneInput(scene).higgsfieldMediaId} onChange={(e) => setSceneInputValue(scene, "higgsfieldMediaId", e.target.value)} />
+                    <input className="input" placeholder="GPT Image 2 still job ID" value={getSceneInput(scene).stillImageJobId} onChange={(e) => setSceneInputValue(scene, "stillImageJobId", e.target.value)} />
+                    <span />
+                    <input className="input" placeholder="Approved still image URL" value={getSceneInput(scene).stillImageUrl} onChange={(e) => setSceneInputValue(scene, "stillImageUrl", e.target.value)} />
+                    <input className="input" placeholder="Animation video job ID" value={getSceneInput(scene).videoJobId} onChange={(e) => setSceneInputValue(scene, "videoJobId", e.target.value)} />
+                    <span />
+                    <input className="input" style={{ gridColumn: "1 / span 2" }} placeholder="Final animated scene video URL" value={getSceneInput(scene).videoUrl} onChange={(e) => setSceneInputValue(scene, "videoUrl", e.target.value)} />
                     <button
                       className="button"
                       disabled={!!busy}
-                      onClick={async () => {
-                        const values = sceneInputs[scene.id] ?? { requestId: scene.higgsfieldRequestId ?? "", videoUrl: scene.videoUrl ?? "" };
-                        await fetch(`/api/leads/${leadId}/creative/scenes/${scene.id}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            status: values.videoUrl ? "ready" : "queued",
-                            higgsfieldRequestId: values.requestId || undefined,
-                            videoUrl: values.videoUrl || undefined,
-                          }),
-                        });
-                        await load();
-                      }}
+                      onClick={() => void saveScene(scene)}
                     >
                       Save
                     </button>

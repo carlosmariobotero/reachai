@@ -15,6 +15,10 @@ export async function PATCH(
     const { leadId, sceneId } = await params;
     const body = (await request.json()) as {
       status?: CreativeSceneStatus;
+      higgsfieldMediaId?: string;
+      stillImageJobId?: string;
+      stillImageUrl?: string;
+      videoJobId?: string;
       higgsfieldRequestId?: string;
       videoUrl?: string;
       thumbnailUrl?: string;

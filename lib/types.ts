@@ -226,6 +226,10 @@ export interface CreativeVideoScene {
   higgsfieldPrompt: string;
   captionText: string;
   status: CreativeSceneStatus;
+  higgsfieldMediaId?: string;
+  stillImageJobId?: string;
+  stillImageUrl?: string;
+  videoJobId?: string;
   higgsfieldRequestId?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
@@ -263,6 +267,10 @@ export interface CreativeVideoSceneRow {
   higgsfield_prompt: string;
   caption_text: string;
   status: CreativeSceneStatus;
+  higgsfield_media_id: string | null;
+  still_image_job_id: string | null;
+  still_image_url: string | null;
+  video_job_id: string | null;
   higgsfield_request_id: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
