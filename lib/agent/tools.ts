@@ -12,6 +12,26 @@ import {
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+const DEFAULT_AGENT_MODEL = "claude-sonnet-4-20250514";
+const AGENT_MODEL = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_AGENT_MODEL;
+
+function normalizeApolloCompanySize(companySize: string): string | undefined {
+  const normalized = companySize.replace(/[–—-]/g, ",").replace(/\s+/g, "");
+  const ranges: Record<string, string | undefined> = {
+    "1,10": "1,10",
+    "11,50": "11,50",
+    "51,200": "51,200",
+    "201,1K": "201,1000",
+    "1K,5K": "1000,5000",
+    "5K+": "5000,1000000",
+  };
+  return ranges[normalized] ?? normalized;
+}
+
+function normalizeApolloLocations(geography: string[]): string[] | undefined {
+  const locations = geography.filter((location) => !location.toLowerCase().includes("global"));
+  return locations.length > 0 ? locations : undefined;
+}
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -140,16 +160,16 @@ export const agentTools: Anthropic.Tool[] = [
 async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolResult> {
   const campaignId = input.campaign_id as string;
   const jobTitles = input.job_titles as string[];
-  const companySize = input.company_size as string;
+  const companySize = normalizeApolloCompanySize(input.company_size as string);
   const geography = input.geography as string[];
   const leadCount = input.lead_count as number;
 
   const response = await axios.post(
-    "https://api.apollo.io/v1/mixed_people/search",
+    "https://api.apollo.io/api/v1/mixed_people/search",
     {
       person_titles: jobTitles,
-      organization_num_employees_ranges: [companySize],
-      person_locations: geography,
+      organization_num_employees_ranges: companySize ? [companySize] : undefined,
+      person_locations: normalizeApolloLocations(geography),
       per_page: leadCount,
     },
     {
@@ -225,7 +245,7 @@ async function generateScript(input: Record<string, unknown>): Promise<AgentTool
   const websiteUrl = (input.website_url as string | undefined) ?? "";
 
   const response = await anthropic.messages.create({
-    model: "claude-opus-4-7",
+    model: AGENT_MODEL,
     max_tokens: 1024,
     messages: [
       {

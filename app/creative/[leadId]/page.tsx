@@ -243,6 +243,19 @@ export default function CreativeLeadPage() {
             </div>
             {data.job && (
               <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
+                <div className="panel" style={{ padding: "14px", background: "#050505" }}>
+                  <p className="mono" style={{ color: "#BEFF00", fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase", marginTop: 0 }}>AI Research</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <label style={{ display: "grid", gap: "8px" }}>
+                      <span className="mono muted" style={{ fontSize: "10px", letterSpacing: ".1em", textTransform: "uppercase" }}>Client Research</span>
+                      <textarea className="textarea" readOnly value={data.job.clientResearchSummary ?? "No client research saved yet."} />
+                    </label>
+                    <label style={{ display: "grid", gap: "8px" }}>
+                      <span className="mono muted" style={{ fontSize: "10px", letterSpacing: ".1em", textTransform: "uppercase" }}>Lead Research</span>
+                      <textarea className="textarea" readOnly value={data.job.leadResearchSummary ?? "No lead research saved yet."} />
+                    </label>
+                  </div>
+                </div>
                 <p style={{ margin: 0, fontSize: "15px", fontWeight: 800 }}>{data.job.salesAngle}</p>
                 <textarea className="textarea" readOnly value={data.job.voiceoverScript ?? ""} />
                 <textarea className="textarea" readOnly value={data.job.outreachMessage ?? ""} />

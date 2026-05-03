@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         html: `<p>Hi ${clientName},</p>
 <p>Your personalized outreach campaign <strong>${name}</strong> has been created and is now being processed.</p>
 <p>We'll scrape up to <strong>${leadCount} leads</strong> matching your ICP and start personalizing videos automatically.</p>
-<p>Track progress at: <a href="${process.env.NEXT_PUBLIC_APP_URL}/campaigns/${campaign.id}">${process.env.NEXT_PUBLIC_APP_URL}/campaigns/${campaign.id}</a></p>
+<p>Track progress at: <a href="${process.env.NEXT_PUBLIC_APP_URL}/client/${campaign.id}">${process.env.NEXT_PUBLIC_APP_URL}/client/${campaign.id}</a></p>
 <p>— The ReachAI Team</p>`,
       })
       .catch((err: unknown) => console.error("Confirmation email failed:", err));
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         campaign_id: campaign.id,
-        client_url: `${process.env.NEXT_PUBLIC_APP_URL}/campaigns/${campaign.id}`,
+        client_url: `${process.env.NEXT_PUBLIC_APP_URL}/client/${campaign.id}`,
         status: campaign.status,
       },
       { status: 201 }

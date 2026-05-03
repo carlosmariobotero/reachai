@@ -74,7 +74,7 @@ const STEPS: Step[] = [
     id: "leadCount", type: "slider", key: "leadCount",
     label: "Last question.",
     question: "How many leads do you need?",
-    min: 25, max: 500, step: 25, defaultVal: 100,
+    min: 1, max: 25, step: 1, defaultVal: 5,
   },
   {
     id: "email", type: "text", key: "email",

@@ -2,6 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Campaign, CreativeBrief, CreativeScenePlan, Lead } from "../types";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const DEFAULT_CREATIVE_MODEL = "claude-sonnet-4-20250514";
+const CREATIVE_MODEL = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_CREATIVE_MODEL;
 
 function parseJsonObject(text: string): unknown {
   const match = text.match(/\{[\s\S]*\}/);
@@ -167,7 +169,7 @@ Rules:
 - Higgsfield prompts must be visually specific, premium, realistic, and silent.`;
 
   const response = await anthropic.messages.create({
-    model: process.env.ANTHROPIC_MODEL ?? "claude-3-5-sonnet-latest",
+    model: CREATIVE_MODEL,
     max_tokens: 2200,
     temperature: 0.7,
     messages: [{ role: "user", content: prompt }],
