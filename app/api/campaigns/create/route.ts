@@ -4,6 +4,7 @@ import { createCampaign } from "../../../../lib/integrations/supabase";
 import { runCampaign } from "../../../../lib/agent/index";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     const campaign = await createCampaign({
-      clientId,
+      clientId: UUID_PATTERN.test(clientId) ? clientId : crypto.randomUUID(),
       clientName,
       clientEmail,
       websiteUrl,

@@ -466,6 +466,11 @@ export default function ClientIntake() {
                 <button className="back-btn" onClick={() => setStep((s) => s - 1)}>← Back</button>
               )}
             </div>
+            {submitError && (
+              <p style={{ marginTop: "18px", color: "#F07B5D", fontSize: "13px", lineHeight: 1.5 }}>
+                {submitError}
+              </p>
+            )}
 
             <p style={{ marginTop: "40px", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#222", letterSpacing: "0.1em" }}>
               {step} / {STEPS.length - 2}
