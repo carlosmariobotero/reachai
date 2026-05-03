@@ -245,7 +245,6 @@ async function searchApolloPeople(input: {
   try {
     response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "X-Api-Key": apiKey,
         "Content-Type": "application/json",
       },

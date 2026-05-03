@@ -35,7 +35,6 @@ export async function searchPeople(
     undefined,
     {
       headers: {
-        Authorization: `Bearer ${APOLLO_API_KEY}`,
         "X-Api-Key": APOLLO_API_KEY,
         "Content-Type": "application/json",
       },
@@ -50,7 +49,6 @@ export async function enrichPerson(email: string): Promise<ApolloPerson | null> 
     { email },
     {
       headers: {
-        Authorization: `Bearer ${APOLLO_API_KEY}`,
         "X-Api-Key": APOLLO_API_KEY,
         "Content-Type": "application/json",
       },
