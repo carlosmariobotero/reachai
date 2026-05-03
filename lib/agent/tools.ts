@@ -22,17 +22,17 @@ function getApolloApiKey(): string {
   return process.env.APOLLO_API_KEY?.trim() ?? "";
 }
 
-function normalizeApolloCompanySize(companySize: string): string | undefined {
+function normalizeApolloCompanySize(companySize: string): string[] {
   const normalized = companySize.replace(/[–—-]/g, ",").replace(/\s+/g, "");
-  const ranges: Record<string, string | undefined> = {
-    "1,10": "1,10",
-    "11,50": "11,50",
-    "51,200": "51,200",
-    "201,1K": "201,1000",
-    "1K,5K": "1000,5000",
-    "5K+": "5000,1000000",
+  const ranges: Record<string, string[]> = {
+    "1,10": ["11,50", "51,200"],
+    "11,50": ["11,50", "51,200", "201,1000"],
+    "51,200": ["51,200", "201,1000", "1000,5000"],
+    "201,1K": ["201,1000", "1000,5000"],
+    "1K,5K": ["1000,5000", "5000,1000000"],
+    "5K+": ["5000,1000000"],
   };
-  return ranges[normalized] ?? normalized;
+  return ranges[normalized] ?? [normalized];
 }
 
 function normalizeApolloLocations(geography: string[]): string[] | undefined {
@@ -44,14 +44,20 @@ function appendApolloFilters(
   params: URLSearchParams,
   input: {
     jobTitles: string[];
-    companySize?: string;
+    companySizes?: string[];
     locations?: string[];
     leadCount: number;
+    seniorities?: string[];
+    marketKeywords?: string[];
+    strictTitles?: boolean;
   }
 ) {
   input.jobTitles.forEach((title) => params.append("person_titles[]", title));
-  input.locations?.forEach((location) => params.append("person_locations[]", location));
-  if (input.companySize) params.append("organization_num_employees_ranges[]", input.companySize);
+  input.seniorities?.forEach((seniority) => params.append("person_seniorities[]", seniority));
+  input.locations?.forEach((location) => params.append("organization_locations[]", location));
+  input.companySizes?.forEach((range) => params.append("organization_num_employees_ranges[]", range));
+  if (input.marketKeywords?.length) params.set("q_keywords", input.marketKeywords.join(" "));
+  if (input.strictTitles) params.set("include_similar_titles", "false");
   params.set("page", "1");
   params.set("per_page", String(input.leadCount));
 }
@@ -73,6 +79,160 @@ function organizationFor(person: Record<string, unknown>): Record<string, unknow
 
 function locationFor(person: Record<string, unknown>): string | undefined {
   return asString(person.city) || asString(person.state) || asString(person.country) || undefined;
+}
+
+function asNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return Number(value.replace(/[^0-9.]/g, "")) || 0;
+  return 0;
+}
+
+function normalizedWords(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function inferSeniorities(jobTitles: string[]): string[] {
+  const seniorities = new Set<string>();
+  const titleText = jobTitles.join(" ").toLowerCase();
+  if (/\b(owner|principal)\b/.test(titleText)) seniorities.add("owner");
+  if (/\b(founder|co founder|co-founder)\b/.test(titleText)) seniorities.add("founder");
+  if (/\b(ceo|cto|coo|cmo|cfo|cio|cro|chief|president)\b/.test(titleText)) seniorities.add("c_suite");
+  if (/\b(partner)\b/.test(titleText)) seniorities.add("partner");
+  if (/\b(vp|vice president)\b/.test(titleText)) seniorities.add("vp");
+  if (/\b(head|lead)\b/.test(titleText)) seniorities.add("head");
+  if (/\b(director)\b/.test(titleText)) seniorities.add("director");
+  return Array.from(seniorities.size ? seniorities : new Set(["founder", "c_suite", "owner", "partner", "vp"]));
+}
+
+function titleMatchesAnyRequested(title: string, requestedTitles: string[]): boolean {
+  const normalizedTitle = ` ${normalizedWords(title).join(" ")} `;
+  return requestedTitles.some((requested) => {
+    const normalizedRequested = normalizedWords(requested).join(" ");
+    if (!normalizedRequested) return false;
+    const acronym = requested.trim().toLowerCase();
+    return normalizedTitle.includes(` ${normalizedRequested} `) || normalizedTitle.includes(` ${acronym} `);
+  });
+}
+
+function isWeakCompanyName(company?: string): boolean {
+  if (!company) return true;
+  const value = company.toLowerCase();
+  return /\b(self employed|freelance|independent|consultant|student|stealth|personal|n\/a)\b/.test(value);
+}
+
+function hasHighIntentOrganization(person: Record<string, unknown>): boolean {
+  const org = organizationFor(person);
+  if (!org) return false;
+  const employees = asNumber(org.estimated_num_employees ?? org.num_employees);
+  const revenue = asNumber(org.annual_revenue ?? org.revenue);
+  const openJobs = asNumber(org.num_jobs ?? org.active_job_postings_count);
+  const domain = asString(org.primary_domain) || asString(org.website_url);
+
+  return Boolean(domain) && (employees >= 11 || revenue >= 1_000_000 || openJobs >= 3);
+}
+
+function leadQualityScore(person: Record<string, unknown>, requestedTitles: string[]): number {
+  const title = asString(person.title);
+  const org = organizationFor(person);
+  const company = asString(org?.name);
+  const linkedinUrl = linkedinUrlFor(person);
+  const employees = asNumber(org?.estimated_num_employees ?? org?.num_employees);
+  const revenue = asNumber(org?.annual_revenue ?? org?.revenue);
+  const openJobs = asNumber(org?.num_jobs ?? org?.active_job_postings_count);
+
+  let score = 0;
+  if (linkedinUrl) score += 35;
+  if (titleMatchesAnyRequested(title, requestedTitles)) score += 25;
+  if (/\b(owner|founder|co-founder|ceo|chief|cto|coo|cmo|cfo|president|partner|vp|head|director)\b/i.test(title)) score += 15;
+  if (employees >= 50) score += 10;
+  else if (employees >= 11) score += 6;
+  if (revenue >= 5_000_000) score += 10;
+  else if (revenue >= 1_000_000) score += 6;
+  if (openJobs >= 5) score += 5;
+  if (isWeakCompanyName(company)) score -= 30;
+  if (/\b(intern|student|assistant|associate|freelance|consultant)\b/i.test(title)) score -= 30;
+  return score;
+}
+
+function qualifiedApolloLead(person: Record<string, unknown>, requestedTitles: string[]): boolean {
+  const title = asString(person.title);
+  const org = organizationFor(person);
+  return Boolean(linkedinUrlFor(person)) &&
+    titleMatchesAnyRequested(title, requestedTitles) &&
+    !isWeakCompanyName(asString(org?.name)) &&
+    hasHighIntentOrganization(person) &&
+    leadQualityScore(person, requestedTitles) >= 60;
+}
+
+const MARKET_STOP_WORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "your",
+  "our",
+  "you",
+  "are",
+  "from",
+  "that",
+  "this",
+  "into",
+  "more",
+  "company",
+  "business",
+  "services",
+  "solutions",
+  "platform",
+  "home",
+  "about",
+  "contact",
+]);
+
+async function websiteMarketKeywords(websiteUrl?: string): Promise<string[]> {
+  if (!websiteUrl) return [];
+  try {
+    const response = await axios.get<string>(websiteUrl, {
+      timeout: 6000,
+      maxRedirects: 3,
+      headers: {
+        "User-Agent": "ReachAI lead qualification bot",
+        accept: "text/html,application/xhtml+xml",
+      },
+    });
+    const text = response.data
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .slice(0, 12000);
+    const counts = new Map<string, number>();
+    normalizedWords(text).forEach((word) => {
+      if (word.length < 4 || MARKET_STOP_WORDS.has(word)) return;
+      counts.set(word, (counts.get(word) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([word]) => word);
+  } catch {
+    return [];
+  }
+}
+
+async function buildMarketKeywords(input: {
+  industries?: string[];
+  painPoint?: string;
+  websiteUrl?: string;
+}): Promise<string[]> {
+  const websiteWords = await websiteMarketKeywords(input.websiteUrl);
+  const questionnaireWords = normalizedWords(
+    [...(input.industries ?? []), input.painPoint ?? ""].join(" ")
+  ).filter((word) => word.length >= 4 && !MARKET_STOP_WORDS.has(word));
+  return Array.from(new Set([...questionnaireWords, ...websiteWords])).slice(0, 5);
 }
 
 function extractApolloPeople(data: unknown): Record<string, unknown>[] {
@@ -141,6 +301,19 @@ export const agentTools: Anthropic.Tool[] = [
           description: "Target locations",
         },
         lead_count: { type: "number", description: "Number of leads to fetch" },
+        industries: {
+          type: "array",
+          items: { type: "string" },
+          description: "Target industries from the questionnaire",
+        },
+        pain_point: {
+          type: "string",
+          description: "Client's positioning or pain point from the questionnaire",
+        },
+        website_url: {
+          type: "string",
+          description: "Client website URL used to infer market keywords",
+        },
       },
       required: ["campaign_id", "job_titles", "company_size", "geography", "lead_count"],
     },
@@ -245,13 +418,23 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
   const companySize = normalizeApolloCompanySize(input.company_size as string);
   const geography = input.geography as string[];
   const leadCount = input.lead_count as number;
+  const industries = (input.industries as string[] | undefined) ?? [];
+  const painPoint = input.pain_point as string | undefined;
+  const websiteUrl = input.website_url as string | undefined;
+  const marketKeywords = await buildMarketKeywords({ industries, painPoint, websiteUrl });
 
-  const people = await searchApolloPeople({ jobTitles, companySize, geography, leadCount });
-  const linkedinReadyPeople = people.filter((person) => linkedinUrlFor(person));
+  const people = await searchApolloPeople({
+    jobTitles,
+    companySize,
+    geography,
+    leadCount,
+    marketKeywords,
+  });
+  const linkedinReadyPeople = people.filter((person) => qualifiedApolloLead(person, jobTitles));
 
   if (linkedinReadyPeople.length === 0) {
     throw new Error(
-      "Apollo found people, but none had LinkedIn URLs after enrichment. No leads were saved because LinkedIn is required for profile-photo sourcing."
+      "Apollo found people, but none passed the high-ticket lead quality gate. No leads were saved because ReachAI requires LinkedIn, exact title relevance, and a real company signal."
     );
   }
 
@@ -278,6 +461,8 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
       leads_created: created.length,
       lead_ids: created,
       linkedin_required: true,
+      quality_gate: "linkedin + exact requested title + real company signal",
+      market_keywords: marketKeywords,
       candidates_found: people.length,
     },
   };
@@ -285,60 +470,92 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
 
 async function searchApolloPeople(input: {
   jobTitles: string[];
-  companySize?: string;
+  companySize?: string[];
   geography: string[];
   leadCount: number;
+  marketKeywords?: string[];
 }): Promise<Record<string, unknown>[]> {
   const apiKey = getApolloApiKey();
   if (!apiKey) throw new Error("APOLLO_API_KEY is missing in Vercel.");
   const locations = normalizeApolloLocations(input.geography);
-  const params = new URLSearchParams();
-  appendApolloFilters(params, {
-    jobTitles: input.jobTitles,
-    companySize: input.companySize,
-    locations,
-    leadCount: Math.min(Math.max(input.leadCount * 4, input.leadCount), 100),
-  });
+  const requestedCandidates = Math.min(Math.max(input.leadCount * 8, input.leadCount), 100);
+  const attempts = [
+    {
+      strictTitles: true,
+      seniorities: inferSeniorities(input.jobTitles),
+      marketKeywords: input.marketKeywords,
+    },
+    {
+      strictTitles: true,
+      seniorities: inferSeniorities(input.jobTitles),
+    },
+  ];
 
-  let people: Record<string, unknown>[];
-  try {
-    const response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
-      headers: {
-        "X-Api-Key": apiKey,
-        "Content-Type": "application/json",
-      },
+  const qualified = new Map<string, Record<string, unknown>>();
+
+  for (const attempt of attempts) {
+    const params = new URLSearchParams();
+    appendApolloFilters(params, {
+      jobTitles: input.jobTitles,
+      companySizes: input.companySize,
+      locations,
+      leadCount: requestedCandidates,
+      ...attempt,
     });
-    people = response.data?.people ?? [];
-  } catch (error) {
-    if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
 
-    const response = await axios.post(
-      APOLLO_LEGACY_SEARCH_URL,
-      {
-        api_key: apiKey,
-        person_titles: input.jobTitles,
-        organization_num_employees_ranges: input.companySize ? [input.companySize] : undefined,
-        person_locations: locations,
-        per_page: Math.min(Math.max(input.leadCount * 4, input.leadCount), 100),
-      },
-      {
+    let people: Record<string, unknown>[];
+    try {
+      const response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
         headers: {
           "X-Api-Key": apiKey,
           "Content-Type": "application/json",
         },
+      });
+      people = response.data?.people ?? [];
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 400) {
+        continue;
       }
-    );
-    people = response.data?.people ?? [];
+      if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
+
+      const response = await axios.post(
+        APOLLO_LEGACY_SEARCH_URL,
+        {
+          api_key: apiKey,
+          person_titles: input.jobTitles,
+          person_seniorities: inferSeniorities(input.jobTitles),
+          organization_num_employees_ranges: input.companySize,
+          organization_locations: locations,
+          q_keywords: attempt.marketKeywords?.join(" "),
+          include_similar_titles: false,
+          per_page: requestedCandidates,
+        },
+        {
+          headers: {
+            "X-Api-Key": apiKey,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      people = response.data?.people ?? [];
+    }
+
+    const directMatches = people.filter((person) => qualifiedApolloLead(person, input.jobTitles));
+    const enriched = await enrichApolloPeopleById(people, requestedCandidates);
+    [...directMatches, ...enriched]
+      .filter((person) => qualifiedApolloLead(person, input.jobTitles))
+      .sort((a, b) => leadQualityScore(b, input.jobTitles) - leadQualityScore(a, input.jobTitles))
+      .forEach((person) => {
+        qualified.set(linkedinUrlFor(person), person);
+      });
+
+    if (qualified.size >= input.leadCount) {
+      break;
+    }
   }
 
-  const directMatches = people.filter((person) => linkedinUrlFor(person));
-  const enriched = await enrichApolloPeopleById(people, input.leadCount);
-  return [...directMatches, ...enriched]
-    .filter((person, index, all) => {
-      const linkedinUrl = linkedinUrlFor(person);
-      if (!linkedinUrl) return false;
-      return all.findIndex((candidate) => linkedinUrlFor(candidate) === linkedinUrl) === index;
-    })
+  return Array.from(qualified.values())
+    .sort((a, b) => leadQualityScore(b, input.jobTitles) - leadQualityScore(a, input.jobTitles))
     .slice(0, input.leadCount);
 }
 
@@ -396,10 +613,11 @@ export async function testApolloSearch(): Promise<{
 }> {
   try {
     const people = await searchApolloPeople({
-      jobTitles: ["Founder"],
-      companySize: "1,10",
+      jobTitles: ["Founder", "CEO"],
+      companySize: normalizeApolloCompanySize("11,50"),
       geography: ["United States"],
       leadCount: 1,
+      marketKeywords: ["marketing", "growth"],
     });
     const first = people[0];
     const org = first ? organizationFor(first) : undefined;

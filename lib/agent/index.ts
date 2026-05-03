@@ -17,6 +17,9 @@ export async function runCampaign(campaignId: string): Promise<void> {
     company_size: campaign.companySize,
     geography: campaign.geography,
     lead_count: campaign.leadCount,
+    industries: campaign.industries,
+    pain_point: campaign.painPoint,
+    website_url: campaign.websiteUrl,
   });
 
   if (!scrapeResult.success) {
