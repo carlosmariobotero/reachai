@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         html: confirmationEmailHtml({ clientName, name, leadCount, trackingUrl }),
       });
     } catch (err) {
-      emailWarning = err instanceof Error ? err.message : "Confirmation email failed";
+      emailWarning = `Email failed: ${err instanceof Error ? err.message : "confirmation email failed"}. If you want real client emails, verify a sending domain in Resend and set RESEND_FROM_EMAIL in Vercel.`;
       console.error("Confirmation email failed:", err);
     }
 
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     try {
       await runCampaign(campaign.id);
     } catch (err) {
-      scrapeWarning = err instanceof Error ? err.message : "Apollo scraping failed";
+      scrapeWarning = `Apollo failed: ${err instanceof Error ? err.message : "lead scraping failed"}`;
       console.error(`runCampaign ${campaign.id} failed:`, err);
     }
 

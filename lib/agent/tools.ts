@@ -14,6 +14,7 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 const DEFAULT_AGENT_MODEL = "claude-sonnet-4-20250514";
 const AGENT_MODEL = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_AGENT_MODEL;
+const APOLLO_PEOPLE_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_people/api_search";
 
 function normalizeApolloCompanySize(companySize: string): string | undefined {
   const normalized = companySize.replace(/[–—-]/g, ",").replace(/\s+/g, "");
@@ -31,6 +32,22 @@ function normalizeApolloCompanySize(companySize: string): string | undefined {
 function normalizeApolloLocations(geography: string[]): string[] | undefined {
   const locations = geography.filter((location) => !location.toLowerCase().includes("global"));
   return locations.length > 0 ? locations : undefined;
+}
+
+function getApolloErrorMessage(error: unknown): string {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof Error ? error.message : "Apollo scraping failed";
+  }
+
+  const status = error.response?.status;
+  const details = error.response?.data;
+  const detailText = typeof details === "string" ? details : JSON.stringify(details ?? {});
+
+  if (status === 403) {
+    return "Apollo rejected lead scraping with 403. People API Search requires a master API key and a plan with API Search access. Create a master key in Apollo and update APOLLO_API_KEY in Vercel.";
+  }
+
+  return `Apollo scraping failed${status ? ` with status ${status}` : ""}: ${detailText}`;
 }
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
@@ -165,7 +182,7 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
   const leadCount = input.lead_count as number;
 
   const response = await axios.post(
-    "https://api.apollo.io/api/v1/mixed_people/search",
+    APOLLO_PEOPLE_SEARCH_URL,
     {
       person_titles: jobTitles,
       organization_num_employees_ranges: companySize ? [companySize] : undefined,
@@ -174,6 +191,7 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
     },
     {
       headers: {
+        Authorization: `Bearer ${process.env.APOLLO_API_KEY!}`,
         "X-Api-Key": process.env.APOLLO_API_KEY!,
         "Content-Type": "application/json",
       },
@@ -350,7 +368,9 @@ export async function executeTool(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: toolName === "scrape_leads"
+        ? getApolloErrorMessage(error)
+        : error instanceof Error ? error.message : "Unknown error",
     };
   }
 }

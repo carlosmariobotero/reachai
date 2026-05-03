@@ -24,7 +24,7 @@ export async function searchPeople(
   params: ApolloSearchParams
 ): Promise<ApolloPerson[]> {
   const response = await axios.post(
-    `${APOLLO_BASE_URL}/mixed_people/search`,
+    `${APOLLO_BASE_URL}/mixed_people/api_search`,
     {
       q_keywords: params.query,
       person_titles: params.titles,
@@ -33,6 +33,7 @@ export async function searchPeople(
     },
     {
       headers: {
+        Authorization: `Bearer ${APOLLO_API_KEY}`,
         "X-Api-Key": APOLLO_API_KEY,
         "Content-Type": "application/json",
       },
@@ -47,6 +48,7 @@ export async function enrichPerson(email: string): Promise<ApolloPerson | null> 
     { email },
     {
       headers: {
+        Authorization: `Bearer ${APOLLO_API_KEY}`,
         "X-Api-Key": APOLLO_API_KEY,
         "Content-Type": "application/json",
       },
