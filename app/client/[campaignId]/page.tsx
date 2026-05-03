@@ -39,7 +39,7 @@ const css = `
   .tab-btn.active { border-color: ${G}; color: ${G}; background: ${G}08; }
 
   .lead-row {
-    display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr;
+    display: grid; grid-template-columns: 2fr 1.5fr 1fr 0.8fr 1fr;
     align-items: center; gap: 12px;
     padding: 14px 24px; border-bottom: 1px solid #0D0D0D;
     transition: background 0.1s;
@@ -84,6 +84,7 @@ interface ApiLead {
   lastName: string;
   title?: string;
   company?: string;
+  linkedinUrl?: string;
   location?: string;
   status: string;
   videoUrl?: string;
@@ -124,6 +125,7 @@ interface DashLead {
   name: string;
   title: string;
   company: string;
+  linkedinUrl: string;
   location: string;
   status: string;
   video: boolean;
@@ -186,6 +188,7 @@ function buildDashData(data: StatusResponse): DashData {
     name: `${l.firstName} ${l.lastName}`,
     title: l.title ?? "",
     company: l.company ?? "",
+    linkedinUrl: l.linkedinUrl ?? "",
     location: l.location ?? "",
     status: LEAD_STATUS_MAP[l.status] ?? "scraped",
     video: !!l.videoUrl,
@@ -458,8 +461,8 @@ export default function ClientDashboard() {
         {/* ── LEADS ── */}
         {tab === "leads" && (
           <div className="fu" style={{ background: S1, border: `1px solid ${BORDER}`, borderRadius: "4px", overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr", gap: "12px", padding: "12px 24px", borderBottom: "1px solid #0D0D0D" }}>
-              {["Contact","Company","Location","Status"].map((h) => (
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 0.8fr 1fr", gap: "12px", padding: "12px 24px", borderBottom: "1px solid #0D0D0D" }}>
+              {["Contact","Company","Location","LinkedIn","Status"].map((h) => (
                 <span key={h} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#222", letterSpacing: "0.12em", textTransform: "uppercase" }}>{h}</span>
               ))}
             </div>
@@ -484,6 +487,13 @@ export default function ClientDashboard() {
                     </div>
                     <span style={{ fontSize: "13px", color: "#666" }}>{l.company}</span>
                     <span style={{ fontSize: "12px", color: "#444" }}>{l.location}</span>
+                    {l.linkedinUrl ? (
+                      <a href={l.linkedinUrl} target="_blank" rel="noreferrer" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: G, textDecoration: "none", letterSpacing: "0.08em" }}>
+                        OPEN
+                      </a>
+                    ) : (
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#222", letterSpacing: "0.08em" }}>N/A</span>
+                    )}
                     <span className="status-dot-wrap" style={{ color: st.color }}>
                       <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: st.color, display: "inline-block", flexShrink: 0 }} />
                       {st.label}

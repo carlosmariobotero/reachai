@@ -47,7 +47,7 @@ const css = `
   .campaign-row.header:hover { background: transparent; }
 
   .lead-row {
-    display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 1fr;
+    display: grid; grid-template-columns: 1.6fr 1.3fr 1fr 0.8fr 0.8fr 1.6fr;
     align-items: center; gap: 12px;
     padding: 14px 20px; border-bottom: 1px solid ${BORDER};
     transition: background 0.1s; cursor: pointer;
@@ -97,7 +97,7 @@ interface ApiCampaign {
   clientName: string;
   name: string;
   status: string;
-  industries: string[];
+  industries?: string[] | null;
   stats: {
     totalLeads: number;
     researched: number;
@@ -105,7 +105,7 @@ interface ApiCampaign {
     videosGenerated: number;
     emailsSent: number;
     responses: number;
-  };
+  } | null;
   createdAt: string;
 }
 
@@ -115,7 +115,9 @@ interface ApiLead {
   lastName: string;
   title?: string;
   company?: string;
+  linkedinUrl?: string;
   location?: string;
+  profilePhotoUrl?: string;
   status: string;
   videoUrl?: string;
 }
@@ -140,7 +142,9 @@ interface DashLead {
   name: string;
   title: string;
   company: string;
+  linkedinUrl: string;
   location: string;
+  profilePhotoUrl: string;
   status: string;
   video: boolean;
 }
@@ -173,20 +177,28 @@ const LEAD_STATUS_MAP: Record<string, string> = {
 };
 
 function mapCampaign(c: ApiCampaign, index: number): DashCampaign {
-  const words = c.clientName.split(" ");
+  const stats = c.stats ?? {
+    totalLeads: 0,
+    researched: 0,
+    scriptsDone: 0,
+    videosGenerated: 0,
+    emailsSent: 0,
+    responses: 0,
+  };
+  const words = (c.clientName || c.name || "Campaign").split(" ");
   const avatar = words.map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return {
     id: c.id,
-    client: c.clientName,
+    client: c.clientName || c.name || "Untitled Campaign",
     avatar,
     color: COLORS[index % COLORS.length],
-    industry: c.industries[0] ?? "—",
-    leads: c.stats.totalLeads,
+    industry: c.industries?.[0] ?? "—",
+    leads: stats.totalLeads,
     status: CAMPAIGN_STATUS_MAP[c.status] ?? "pending",
-    scraped: c.stats.totalLeads,
-    researched: c.stats.researched,
-    videos: c.stats.videosGenerated,
-    delivered: c.stats.emailsSent,
+    scraped: stats.totalLeads,
+    researched: stats.researched,
+    videos: stats.videosGenerated,
+    delivered: stats.emailsSent,
     created: new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
   };
 }
@@ -197,7 +209,9 @@ function mapLead(l: ApiLead): DashLead {
     name: `${l.firstName} ${l.lastName}`,
     title: l.title ?? "",
     company: l.company ?? "",
+    linkedinUrl: l.linkedinUrl ?? "",
     location: l.location ?? "",
+    profilePhotoUrl: l.profilePhotoUrl ?? "",
     status: LEAD_STATUS_MAP[l.status] ?? "scraped",
     video: !!l.videoUrl,
   };
@@ -274,28 +288,61 @@ export default function Dashboard() {
   const [campaigns, setCampaigns] = useState<DashCampaign[]>([]);
   const [activeCampaign, setActiveCampaign] = useState<DashCampaign | null>(null);
   const [activeLeads, setActiveLeads] = useState<DashLead[]>([]);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [uploadingLeadId, setUploadingLeadId] = useState<string | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
       const res = await fetch("/api/campaigns");
-      if (!res.ok) return;
-      const data = await res.json() as { campaigns: ApiCampaign[] };
+      const data = await res.json() as { campaigns?: ApiCampaign[]; error?: string };
+      if (!res.ok) {
+        setDashboardError(data.error ?? "Could not load campaigns");
+        return;
+      }
       setCampaigns((data.campaigns ?? []).map((c, i) => mapCampaign(c, i)));
-    } catch {
-      // silently ignore polling errors
+      setDashboardError(null);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Could not load campaigns");
     }
   }, []);
 
   const fetchLeads = useCallback(async (campaignId: string) => {
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/status`);
-      if (!res.ok) return;
-      const data = await res.json() as { leads: ApiLead[] };
+      const data = await res.json() as { leads?: ApiLead[]; error?: string };
+      if (!res.ok) {
+        setDashboardError(data.error ?? "Could not load leads");
+        return;
+      }
       setActiveLeads((data.leads ?? []).map(mapLead));
-    } catch {
-      // silently ignore polling errors
+      setDashboardError(null);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Could not load leads");
     }
   }, []);
+
+  const uploadLeadPhoto = useCallback(async (leadId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("photo", file);
+    setUploadingLeadId(leadId);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/creative/photo`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        setDashboardError(data.error ?? "Could not upload profile photo");
+        return;
+      }
+      if (activeCampaign) void fetchLeads(activeCampaign.id);
+      setDashboardError(null);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Could not upload profile photo");
+    } finally {
+      setUploadingLeadId(null);
+    }
+  }, [activeCampaign, fetchLeads]);
 
   // Initial load + polling for campaign list
   useEffect(() => {
@@ -395,6 +442,12 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {dashboardError && (
+          <div style={{ margin: "16px 24px 0", border: "1px solid #3A1D12", background: "#120804", borderRadius: "4px", padding: "12px 14px", color: "#F07B5D", fontSize: "12px", lineHeight: 1.5 }}>
+            {dashboardError}
+          </div>
+        )}
 
         {/* ── CAMPAIGNS VIEW ── */}
         {nav === "campaigns" && !activeCampaign && (
@@ -496,7 +549,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="lead-row header">
-                {["Name","Company","Title","Location","Status","Action"].map((h, i) => (
+                {["Name","Company","Title","LinkedIn","Status","Actions"].map((h, i) => (
                   <span key={i} style={{ fontSize: "10px", color: "#2A2A2A", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase" }}>{h}</span>
                 ))}
               </div>
@@ -517,11 +570,32 @@ export default function Dashboard() {
                       </div>
                       <span style={{ fontSize: "13px", color: "#888" }}>{lead.company}</span>
                       <span style={{ fontSize: "12px", color: TEXT2 }}>{lead.title}</span>
-                      <span style={{ fontSize: "12px", color: TEXT2 }}>{lead.location}</span>
+                      {lead.linkedinUrl ? (
+                        <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px", width: "fit-content" }} onClick={(e) => { e.stopPropagation(); window.open(lead.linkedinUrl, "_blank", "noopener,noreferrer"); }}>
+                          LinkedIn
+                        </button>
+                      ) : (
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#2A2A2A", letterSpacing: "0.08em" }}>Missing</span>
+                      )}
                       <span className="status-badge" style={{ background: `${st.color}12`, color: st.color, fontSize: "10px", width: "fit-content" }}>
                         {st.label}
                       </span>
                       <div style={{ display: "flex", gap: "6px" }}>
+                        <label className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px", borderColor: lead.profilePhotoUrl ? `${G}44` : "#1A1A1A", color: lead.profilePhotoUrl ? G : "#555" }} onClick={(e) => e.stopPropagation()}>
+                          {uploadingLeadId === lead.id ? "Uploading..." : lead.profilePhotoUrl ? "Photo Ready" : "Upload Photo"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            style={{ display: "none" }}
+                            disabled={uploadingLeadId === lead.id}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const file = e.currentTarget.files?.[0];
+                              if (file) void uploadLeadPhoto(lead.id, file);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
                         {lead.video ? (
                           <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px", borderColor: `${G}44`, color: G }}>▶ View</button>
                         ) : (
