@@ -16,6 +16,7 @@ const DEFAULT_AGENT_MODEL = "claude-sonnet-4-20250514";
 const AGENT_MODEL = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_AGENT_MODEL;
 const APOLLO_PEOPLE_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_people/api_search";
 const APOLLO_LEGACY_SEARCH_URL = "https://api.apollo.io/v1/mixed_people/search";
+const APOLLO_BULK_MATCH_URL = "https://api.apollo.io/api/v1/people/bulk_match";
 
 function getApolloApiKey(): string {
   return process.env.APOLLO_API_KEY?.trim() ?? "";
@@ -53,6 +54,49 @@ function appendApolloFilters(
   if (input.companySize) params.append("organization_num_employees_ranges[]", input.companySize);
   params.set("page", "1");
   params.set("per_page", String(input.leadCount));
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function linkedinUrlFor(person: Record<string, unknown>): string {
+  const direct = asString(person.linkedin_url);
+  if (direct) return direct;
+  const contact = person.contact as Record<string, unknown> | undefined;
+  return contact ? asString(contact.linkedin_url) : "";
+}
+
+function organizationFor(person: Record<string, unknown>): Record<string, unknown> | undefined {
+  return person.organization as Record<string, unknown> | undefined;
+}
+
+function locationFor(person: Record<string, unknown>): string | undefined {
+  return asString(person.city) || asString(person.state) || asString(person.country) || undefined;
+}
+
+function extractApolloPeople(data: unknown): Record<string, unknown>[] {
+  const payload = data as Record<string, unknown> | undefined;
+  const matches = payload?.matches;
+  const people = payload?.people;
+  const contacts = payload?.contacts;
+
+  if (Array.isArray(matches)) return matches as Record<string, unknown>[];
+  if (Array.isArray(people)) return people as Record<string, unknown>[];
+  if (Array.isArray(contacts)) return contacts as Record<string, unknown>[];
+  return [];
+}
+
+function mergeApolloPerson(
+  original: Record<string, unknown>,
+  enriched: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    ...original,
+    ...enriched,
+    organization: organizationFor(enriched) ?? organizationFor(original),
+    contact: enriched.contact ?? original.contact,
+  };
 }
 
 function getApolloErrorMessage(error: unknown): string {
@@ -203,25 +247,40 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
   const leadCount = input.lead_count as number;
 
   const people = await searchApolloPeople({ jobTitles, companySize, geography, leadCount });
+  const linkedinReadyPeople = people.filter((person) => linkedinUrlFor(person));
+
+  if (linkedinReadyPeople.length === 0) {
+    throw new Error(
+      "Apollo found people, but none had LinkedIn URLs after enrichment. No leads were saved because LinkedIn is required for profile-photo sourcing."
+    );
+  }
 
   const created: string[] = [];
 
-  for (const person of people) {
-    const org = person.organization as Record<string, unknown> | null;
+  for (const person of linkedinReadyPeople) {
+    const org = organizationFor(person);
     const lead = await createLead({
       campaignId,
-      firstName: (person.first_name as string) ?? "",
-      lastName: (person.last_name as string) ?? "",
-      email: (person.email as string) ?? "",
+      firstName: asString(person.first_name),
+      lastName: asString(person.last_name),
+      email: asString(person.email),
       company: (org?.name as string) ?? undefined,
-      title: (person.title as string) ?? undefined,
-      linkedinUrl: (person.linkedin_url as string) ?? undefined,
-      location: (person.city as string) ?? undefined,
+      title: asString(person.title) || undefined,
+      linkedinUrl: linkedinUrlFor(person),
+      location: locationFor(person),
     });
     created.push(lead.id);
   }
 
-  return { success: true, data: { leads_created: created.length, lead_ids: created } };
+  return {
+    success: true,
+    data: {
+      leads_created: created.length,
+      lead_ids: created,
+      linkedin_required: true,
+      candidates_found: people.length,
+    },
+  };
 }
 
 async function searchApolloPeople(input: {
@@ -238,28 +297,29 @@ async function searchApolloPeople(input: {
     jobTitles: input.jobTitles,
     companySize: input.companySize,
     locations,
-    leadCount: input.leadCount,
+    leadCount: Math.min(Math.max(input.leadCount * 4, input.leadCount), 100),
   });
 
-  let response;
+  let people: Record<string, unknown>[];
   try {
-    response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
+    const response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
       headers: {
         "X-Api-Key": apiKey,
         "Content-Type": "application/json",
       },
     });
+    people = response.data?.people ?? [];
   } catch (error) {
     if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
 
-    response = await axios.post(
+    const response = await axios.post(
       APOLLO_LEGACY_SEARCH_URL,
       {
         api_key: apiKey,
         person_titles: input.jobTitles,
         organization_num_employees_ranges: input.companySize ? [input.companySize] : undefined,
         person_locations: locations,
-        per_page: input.leadCount,
+        per_page: Math.min(Math.max(input.leadCount * 4, input.leadCount), 100),
       },
       {
         headers: {
@@ -268,9 +328,59 @@ async function searchApolloPeople(input: {
         },
       }
     );
+    people = response.data?.people ?? [];
   }
 
-  return response.data?.people ?? [];
+  const directMatches = people.filter((person) => linkedinUrlFor(person));
+  const enriched = await enrichApolloPeopleById(people, input.leadCount);
+  return [...directMatches, ...enriched]
+    .filter((person, index, all) => {
+      const linkedinUrl = linkedinUrlFor(person);
+      if (!linkedinUrl) return false;
+      return all.findIndex((candidate) => linkedinUrlFor(candidate) === linkedinUrl) === index;
+    })
+    .slice(0, input.leadCount);
+}
+
+async function enrichApolloPeopleById(
+  people: Record<string, unknown>[],
+  leadCount: number
+): Promise<Record<string, unknown>[]> {
+  const apiKey = getApolloApiKey();
+  const peopleById = new Map<string, Record<string, unknown>>();
+  people.forEach((person) => {
+    const id = asString(person.id);
+    if (id) peopleById.set(id, person);
+  });
+  const ids = Array.from(peopleById.keys());
+  const enriched: Record<string, unknown>[] = [];
+
+  for (let index = 0; index < ids.length && enriched.length < leadCount; index += 10) {
+    const chunk = ids.slice(index, index + 10);
+    const response = await axios.post(
+      `${APOLLO_BULK_MATCH_URL}?reveal_personal_emails=false&reveal_phone_number=false`,
+      { details: chunk.map((id) => ({ id })) },
+      {
+        headers: {
+          "X-Api-Key": apiKey,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          accept: "application/json",
+        },
+      }
+    );
+    const matches = extractApolloPeople(response.data);
+    enriched.push(
+      ...matches
+        .map((person) => {
+          const original = peopleById.get(asString(person.id));
+          return original ? mergeApolloPerson(original, person) : person;
+        })
+        .filter((person) => linkedinUrlFor(person))
+    );
+  }
+
+  return enriched;
 }
 
 export async function testApolloSearch(): Promise<{
@@ -280,6 +390,7 @@ export async function testApolloSearch(): Promise<{
     name: string;
     title?: string;
     company?: string;
+    linkedinUrl?: string;
   };
   error?: string;
 }> {
@@ -291,7 +402,7 @@ export async function testApolloSearch(): Promise<{
       leadCount: 1,
     });
     const first = people[0];
-    const org = first?.organization as Record<string, unknown> | undefined;
+    const org = first ? organizationFor(first) : undefined;
     return {
       ok: true,
       count: people.length,
@@ -300,6 +411,7 @@ export async function testApolloSearch(): Promise<{
             name: `${(first.first_name as string | undefined) ?? ""} ${(first.last_name as string | undefined) ?? ""}`.trim(),
             title: first.title as string | undefined,
             company: org?.name as string | undefined,
+            linkedinUrl: linkedinUrlFor(first),
           }
         : undefined,
     };
