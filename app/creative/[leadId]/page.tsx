@@ -113,8 +113,10 @@ export default function CreativeLeadPage() {
       const res = await fetch(path, { method: "POST", body, headers });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Request failed");
-      if (json.mcpTasks) {
-        setMessage(`Prepared ${json.mcpTasks.length} Higgsfield MCP tasks. For each scene: upload the lead photo, create a GPT Image 2 still, approve likeness, then animate the still.`);
+      if (json.automationMessage) {
+        setMessage(json.automationMessage);
+      } else if (json.mcpTasks) {
+        setMessage(`Queued ${json.mcpTasks.length} Higgsfield MCP scene jobs for GPT Image 2 stills and animation.`);
       } else if (json.renderInstructions) {
         setMessage(json.renderInstructions);
       } else {
@@ -239,7 +241,10 @@ export default function CreativeLeadPage() {
                 <p className="mono muted" style={{ fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase" }}>Creative Brief</p>
                 <p className="muted" style={{ fontSize: "13px", marginBottom: 0 }}>{data.campaign.clientName} · {data.campaign.websiteUrl}</p>
               </div>
-              <button className="button" disabled={!!busy} onClick={() => post(`/api/leads/${leadId}/creative/research`, "brief")}>{busy === "brief" ? "Working..." : "Generate Brief"}</button>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button className="button" disabled={!!busy} onClick={() => post(`/api/leads/${leadId}/creative/research`, "brief")}>{busy === "brief" ? "Working..." : "Generate Brief"}</button>
+                <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl} onClick={() => post(`/api/leads/${leadId}/creative/automate`, "automate")}>{busy === "automate" ? "Starting..." : "Run Lead Automation"}</button>
+              </div>
             </div>
             {data.job && (
               <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
@@ -269,7 +274,7 @@ export default function CreativeLeadPage() {
                 <p className="mono muted" style={{ fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase" }}>Higgsfield Scenes</p>
                 <p className="muted" style={{ fontSize: "13px", margin: 0 }}>{readyScenes} / 3 animated scene videos ready</p>
               </div>
-              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>{busy === "scenes" ? "Preparing..." : "Prepare MCP Tasks"}</button>
+              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>{busy === "scenes" ? "Queueing..." : "Queue Higgsfield Automation"}</button>
             </div>
 
             <div style={{ display: "grid", gap: "12px" }}>

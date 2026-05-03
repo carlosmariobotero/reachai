@@ -44,6 +44,9 @@ export async function POST(
     return NextResponse.json({
       scenes,
       mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes),
+      automationMessage:
+        "Higgsfield scene jobs are queued for the MCP worker. The worker must run in a Codex/Claude session that is signed in to Higgsfield MCP, then write each GPT Image 2 still and animation URL back to these scene records.",
+      automationMode: "mcp_worker_required",
     });
   } catch (error) {
     console.error("Error queueing Higgsfield scenes:", error);
