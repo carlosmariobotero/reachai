@@ -184,6 +184,7 @@ export default function ClientIntake() {
   const [isLoading, setIsLoading] = useState(false);
   const [confirmUrl, setConfirmUrl] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [setupWarnings, setSetupWarnings] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const current = STEPS[step];
 
@@ -222,8 +223,13 @@ export default function ClientIntake() {
         const data = await res.json() as { error?: string };
         throw new Error(data.error ?? "Failed to create campaign");
       }
-      const data = await res.json() as { client_url: string };
+      const data = await res.json() as {
+        client_url: string;
+        email_warning?: string;
+        scrape_warning?: string;
+      };
       setConfirmUrl(data.client_url);
+      setSetupWarnings([data.email_warning, data.scrape_warning].filter(Boolean) as string[]);
       setIsLoading(false);
       return true;
     } catch (err) {
@@ -341,6 +347,14 @@ export default function ClientIntake() {
                   Your lead list is being generated. Updates will arrive at{" "}
                   <span style={{ color: "#aaa" }}>{(answers.email as string) || "your inbox"}</span>.
                 </p>
+                {setupWarnings.length > 0 && (
+                  <div className="fade-up-delay" style={{ border: "1px solid #2A1D12", background: "#080503", padding: "14px 16px", maxWidth: "520px", marginBottom: "22px" }}>
+                    <p style={{ fontFamily: "'JetBrains Mono', monospace", color: "#F07B5D", fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>Setup warnings</p>
+                    {setupWarnings.map((warning) => (
+                      <p key={warning} style={{ color: "#777", fontSize: "12px", lineHeight: 1.5, marginTop: "6px" }}>{warning}</p>
+                    ))}
+                  </div>
+                )}
                 {confirmUrl && (
                   <div className="fade-up-delay-2">
                     <a href={confirmUrl} style={{ display: "inline-block", padding: "12px 28px", border: `1px solid ${G}`, color: G, textDecoration: "none", fontSize: "11px", fontFamily: "'Syne', sans-serif", fontWeight: "700", letterSpacing: "0.12em", textTransform: "uppercase", borderRadius: "2px" }}>

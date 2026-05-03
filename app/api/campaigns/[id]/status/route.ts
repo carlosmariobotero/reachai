@@ -63,7 +63,7 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching campaign status:", error);
     return NextResponse.json(
-      { error: "Failed to fetch campaign status" },
+      { error: error instanceof Error ? error.message : "Failed to fetch campaign status" },
       { status: 500 }
     );
   }

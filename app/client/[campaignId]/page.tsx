@@ -284,16 +284,24 @@ export default function ClientDashboard() {
   const [tab, setTab] = useState("overview");
   const [d, setD] = useState<DashData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/status`);
-      if (!res.ok) return;
-      const data = await res.json() as StatusResponse;
+      const payload = await res.json() as StatusResponse | { error?: string };
+      if (!res.ok) {
+        setError((payload as { error?: string }).error ?? "Could not load campaign status");
+        setLoading(false);
+        return;
+      }
+      const data = payload as StatusResponse;
       setD(buildDashData(data));
+      setError(null);
       setLoading(false);
-    } catch {
-      // silently ignore polling errors
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load campaign status");
+      setLoading(false);
     }
   }, [campaignId]);
 
@@ -316,6 +324,22 @@ export default function ClientDashboard() {
         <style>{css}</style>
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#222", letterSpacing: "0.2em" }}>LOADING…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div id="client-root">
+        <style>{css}</style>
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "32px" }}>
+          <div style={{ maxWidth: "560px", background: S1, border: `1px solid ${BORDER}`, borderRadius: "4px", padding: "28px" }}>
+            <p style={{ fontFamily: "'JetBrains Mono', monospace", color: "#F07B5D", fontSize: "10px", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "14px" }}>Campaign status error</p>
+            <h1 style={{ fontSize: "28px", lineHeight: 1.15, marginBottom: "12px" }}>This campaign page could not load yet.</h1>
+            <p style={{ color: "#666", fontSize: "13px", lineHeight: 1.6, marginBottom: "18px" }}>{error}</p>
+            <button className="tab-btn active" onClick={() => { setLoading(true); setError(null); void fetchStatus(); }}>Retry</button>
+          </div>
         </div>
       </div>
     );

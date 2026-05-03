@@ -6,6 +6,39 @@ import { runCampaign } from "../../../../lib/agent/index";
 const resend = new Resend(process.env.RESEND_API_KEY!);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function appUrl(request: NextRequest): string {
+  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? request.nextUrl.origin;
+}
+
+function confirmationEmailHtml(input: {
+  clientName: string;
+  name: string;
+  leadCount: number;
+  trackingUrl: string;
+}) {
+  return `<!doctype html>
+<html>
+  <body style="margin:0;background:#050505;color:#ffffff;font-family:Arial,sans-serif;">
+    <div style="max-width:620px;margin:0 auto;padding:36px 24px;">
+      <p style="font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#BEFF00;margin:0 0 28px;">ReachAI</p>
+      <h1 style="font-size:42px;line-height:0.98;margin:0 0 18px;font-weight:800;letter-spacing:-0.04em;">
+        Your campaign is<br><span style="color:#BEFF00;">being built.</span>
+      </h1>
+      <p style="font-size:15px;line-height:1.7;color:#b8b8b8;margin:0 0 28px;">
+        Hi ${input.clientName}, your personalized outreach campaign <strong style="color:#fff;">${input.name}</strong> has been created. ReachAI is now preparing up to <strong style="color:#fff;">${input.leadCount} leads</strong> from your targeting answers.
+      </p>
+      <a href="${input.trackingUrl}" style="display:inline-block;background:#BEFF00;color:#000;text-decoration:none;font-weight:800;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;padding:14px 22px;border-radius:2px;">
+        Track Campaign
+      </a>
+      <div style="height:1px;background:#171717;margin:34px 0 18px;"></div>
+      <p style="font-size:12px;line-height:1.6;color:#666;margin:0;">
+        Next: we scrape matching leads, create personalized creative briefs, then prepare each lead for review before video generation.
+      </p>
+    </div>
+  </body>
+</html>`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -68,35 +101,35 @@ export async function POST(request: NextRequest) {
       name,
     });
 
-    // Send confirmation email to client — fire and forget
-    resend.emails
-      .send({
-        from:
-          process.env.RESEND_FROM_EMAIL ??
-          `outreach@${
-            process.env.NEXT_PUBLIC_APP_URL?.replace("https://", "") ??
-            "reachai.com"
-          }`,
+    const trackingUrl = `${appUrl(request)}/client/${campaign.id}`;
+    let emailWarning: string | undefined;
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL ?? "ReachAI <onboarding@resend.dev>",
         to: clientEmail,
-        subject: `Your ReachAI campaign "${name}" is being set up`,
-        html: `<p>Hi ${clientName},</p>
-<p>Your personalized outreach campaign <strong>${name}</strong> has been created and is now being processed.</p>
-<p>We'll scrape up to <strong>${leadCount} leads</strong> matching your ICP and start personalizing videos automatically.</p>
-<p>Track progress at: <a href="${process.env.NEXT_PUBLIC_APP_URL}/client/${campaign.id}">${process.env.NEXT_PUBLIC_APP_URL}/client/${campaign.id}</a></p>
-<p>— The ReachAI Team</p>`,
-      })
-      .catch((err: unknown) => console.error("Confirmation email failed:", err));
+        subject: `Your ReachAI campaign is being built`,
+        html: confirmationEmailHtml({ clientName, name, leadCount, trackingUrl }),
+      });
+    } catch (err) {
+      emailWarning = err instanceof Error ? err.message : "Confirmation email failed";
+      console.error("Confirmation email failed:", err);
+    }
 
-    // Kick off agent pipeline without blocking the response
-    runCampaign(campaign.id).catch((err: unknown) =>
-      console.error(`runCampaign ${campaign.id} failed:`, err)
-    );
+    let scrapeWarning: string | undefined;
+    try {
+      await runCampaign(campaign.id);
+    } catch (err) {
+      scrapeWarning = err instanceof Error ? err.message : "Apollo scraping failed";
+      console.error(`runCampaign ${campaign.id} failed:`, err);
+    }
 
     return NextResponse.json(
       {
         campaign_id: campaign.id,
-        client_url: `${process.env.NEXT_PUBLIC_APP_URL}/client/${campaign.id}`,
+        client_url: trackingUrl,
         status: campaign.status,
+        email_warning: emailWarning,
+        scrape_warning: scrapeWarning,
       },
       { status: 201 }
     );
