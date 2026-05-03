@@ -15,6 +15,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 const DEFAULT_AGENT_MODEL = "claude-sonnet-4-20250514";
 const AGENT_MODEL = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_AGENT_MODEL;
 const APOLLO_PEOPLE_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_people/api_search";
+const APOLLO_LEGACY_SEARCH_URL = "https://api.apollo.io/v1/mixed_people/search";
 
 function normalizeApolloCompanySize(companySize: string): string | undefined {
   const normalized = companySize.replace(/[–—-]/g, ",").replace(/\s+/g, "");
@@ -32,6 +33,22 @@ function normalizeApolloCompanySize(companySize: string): string | undefined {
 function normalizeApolloLocations(geography: string[]): string[] | undefined {
   const locations = geography.filter((location) => !location.toLowerCase().includes("global"));
   return locations.length > 0 ? locations : undefined;
+}
+
+function appendApolloFilters(
+  params: URLSearchParams,
+  input: {
+    jobTitles: string[];
+    companySize?: string;
+    locations?: string[];
+    leadCount: number;
+  }
+) {
+  input.jobTitles.forEach((title) => params.append("person_titles[]", title));
+  input.locations?.forEach((location) => params.append("person_locations[]", location));
+  if (input.companySize) params.append("organization_num_employees_ranges[]", input.companySize);
+  params.set("page", "1");
+  params.set("per_page", String(input.leadCount));
 }
 
 function getApolloErrorMessage(error: unknown): string {
@@ -181,22 +198,40 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
   const geography = input.geography as string[];
   const leadCount = input.lead_count as number;
 
-  const response = await axios.post(
-    APOLLO_PEOPLE_SEARCH_URL,
-    {
-      person_titles: jobTitles,
-      organization_num_employees_ranges: companySize ? [companySize] : undefined,
-      person_locations: normalizeApolloLocations(geography),
-      per_page: leadCount,
-    },
-    {
+  const apiKey = process.env.APOLLO_API_KEY!;
+  const locations = normalizeApolloLocations(geography);
+  const params = new URLSearchParams();
+  appendApolloFilters(params, { jobTitles, companySize, locations, leadCount });
+
+  let response;
+  try {
+    response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
       headers: {
-        Authorization: `Bearer ${process.env.APOLLO_API_KEY!}`,
-        "X-Api-Key": process.env.APOLLO_API_KEY!,
+        Authorization: `Bearer ${apiKey}`,
+        "X-Api-Key": apiKey,
         "Content-Type": "application/json",
       },
-    }
-  );
+    });
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
+
+    response = await axios.post(
+      APOLLO_LEGACY_SEARCH_URL,
+      {
+        api_key: apiKey,
+        person_titles: jobTitles,
+        organization_num_employees_ranges: companySize ? [companySize] : undefined,
+        person_locations: locations,
+        per_page: leadCount,
+      },
+      {
+        headers: {
+          "X-Api-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
 
   const people: Record<string, unknown>[] = response.data?.people ?? [];
   const created: string[] = [];

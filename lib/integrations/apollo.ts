@@ -23,14 +23,16 @@ export interface ApolloPerson {
 export async function searchPeople(
   params: ApolloSearchParams
 ): Promise<ApolloPerson[]> {
+  const searchParams = new URLSearchParams();
+  params.titles?.forEach((title) => searchParams.append("person_titles[]", title));
+  if (params.query) searchParams.set("q_keywords", params.query);
+  if (params.companies?.length) searchParams.set("q_organization_name", params.companies.join(","));
+  searchParams.set("page", "1");
+  searchParams.set("per_page", String(params.limit ?? 25));
+
   const response = await axios.post(
-    `${APOLLO_BASE_URL}/mixed_people/api_search`,
-    {
-      q_keywords: params.query,
-      person_titles: params.titles,
-      q_organization_name: params.companies?.join(","),
-      per_page: params.limit ?? 25,
-    },
+    `${APOLLO_BASE_URL}/mixed_people/api_search?${searchParams.toString()}`,
+    undefined,
     {
       headers: {
         Authorization: `Bearer ${APOLLO_API_KEY}`,
