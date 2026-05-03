@@ -17,6 +17,10 @@ const AGENT_MODEL = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_AGENT_MODEL;
 const APOLLO_PEOPLE_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_people/api_search";
 const APOLLO_LEGACY_SEARCH_URL = "https://api.apollo.io/v1/mixed_people/search";
 
+function getApolloApiKey(): string {
+  return process.env.APOLLO_API_KEY?.trim() ?? "";
+}
+
 function normalizeApolloCompanySize(companySize: string): string | undefined {
   const normalized = companySize.replace(/[–—-]/g, ",").replace(/\s+/g, "");
   const ranges: Record<string, string | undefined> = {
@@ -198,42 +202,8 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
   const geography = input.geography as string[];
   const leadCount = input.lead_count as number;
 
-  const apiKey = process.env.APOLLO_API_KEY!;
-  const locations = normalizeApolloLocations(geography);
-  const params = new URLSearchParams();
-  appendApolloFilters(params, { jobTitles, companySize, locations, leadCount });
+  const people = await searchApolloPeople({ jobTitles, companySize, geography, leadCount });
 
-  let response;
-  try {
-    response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "X-Api-Key": apiKey,
-        "Content-Type": "application/json",
-      },
-    });
-  } catch (error) {
-    if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
-
-    response = await axios.post(
-      APOLLO_LEGACY_SEARCH_URL,
-      {
-        api_key: apiKey,
-        person_titles: jobTitles,
-        organization_num_employees_ranges: companySize ? [companySize] : undefined,
-        person_locations: locations,
-        per_page: leadCount,
-      },
-      {
-        headers: {
-          "X-Api-Key": apiKey,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  }
-
-  const people: Record<string, unknown>[] = response.data?.people ?? [];
   const created: string[] = [];
 
   for (const person of people) {
@@ -252,6 +222,91 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
   }
 
   return { success: true, data: { leads_created: created.length, lead_ids: created } };
+}
+
+async function searchApolloPeople(input: {
+  jobTitles: string[];
+  companySize?: string;
+  geography: string[];
+  leadCount: number;
+}): Promise<Record<string, unknown>[]> {
+  const apiKey = getApolloApiKey();
+  if (!apiKey) throw new Error("APOLLO_API_KEY is missing in Vercel.");
+  const locations = normalizeApolloLocations(input.geography);
+  const params = new URLSearchParams();
+  appendApolloFilters(params, {
+    jobTitles: input.jobTitles,
+    companySize: input.companySize,
+    locations,
+    leadCount: input.leadCount,
+  });
+
+  let response;
+  try {
+    response = await axios.post(`${APOLLO_PEOPLE_SEARCH_URL}?${params.toString()}`, undefined, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "X-Api-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 403) throw error;
+
+    response = await axios.post(
+      APOLLO_LEGACY_SEARCH_URL,
+      {
+        api_key: apiKey,
+        person_titles: input.jobTitles,
+        organization_num_employees_ranges: input.companySize ? [input.companySize] : undefined,
+        person_locations: locations,
+        per_page: input.leadCount,
+      },
+      {
+        headers: {
+          "X-Api-Key": apiKey,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+
+  return response.data?.people ?? [];
+}
+
+export async function testApolloSearch(): Promise<{
+  ok: boolean;
+  count?: number;
+  sample?: {
+    name: string;
+    title?: string;
+    company?: string;
+  };
+  error?: string;
+}> {
+  try {
+    const people = await searchApolloPeople({
+      jobTitles: ["Founder"],
+      companySize: "1,10",
+      geography: ["United States"],
+      leadCount: 1,
+    });
+    const first = people[0];
+    const org = first?.organization as Record<string, unknown> | undefined;
+    return {
+      ok: true,
+      count: people.length,
+      sample: first
+        ? {
+            name: `${(first.first_name as string | undefined) ?? ""} ${(first.last_name as string | undefined) ?? ""}`.trim(),
+            title: first.title as string | undefined,
+            company: org?.name as string | undefined,
+          }
+        : undefined,
+    };
+  } catch (error) {
+    return { ok: false, error: getApolloErrorMessage(error) };
+  }
 }
 
 async function researchLead(input: Record<string, unknown>): Promise<AgentToolResult> {

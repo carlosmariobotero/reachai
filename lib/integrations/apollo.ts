@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const APOLLO_API_KEY = process.env.APOLLO_API_KEY!;
+const APOLLO_API_KEY = process.env.APOLLO_API_KEY?.trim() ?? "";
 const APOLLO_BASE_URL = "https://api.apollo.io/api/v1";
 
 export interface ApolloSearchParams {
