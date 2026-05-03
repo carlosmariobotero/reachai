@@ -7,7 +7,7 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function appUrl(request: NextRequest): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? request.nextUrl.origin;
+  return request.nextUrl.origin.replace(/\/$/, "");
 }
 
 function confirmationEmailHtml(input: {
