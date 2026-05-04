@@ -130,6 +130,39 @@ export default function CreativeLeadPage() {
     }
   };
 
+  const uploadPhotoAndQueue = async (formData: FormData) => {
+    setBusy("photo");
+    setMessage(null);
+    try {
+      const photoRes = await fetch(`/api/leads/${leadId}/creative/photo`, {
+        method: "POST",
+        body: formData,
+      });
+      const photoJson = await photoRes.json();
+      if (!photoRes.ok) throw new Error(photoJson.error ?? "Photo upload failed");
+
+      setMessage("Photo uploaded. Starting lead automation...");
+
+      const automationRes = await fetch(`/api/leads/${leadId}/creative/automate`, {
+        method: "POST",
+      });
+      const automationJson = await automationRes.json();
+      if (!automationRes.ok) {
+        throw new Error(automationJson.error ?? "Lead automation failed");
+      }
+
+      setMessage(
+        automationJson.automationMessage ??
+          "Photo uploaded and Higgsfield scene automation queued."
+      );
+      await load();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Photo upload failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const readyScenes = useMemo(
     () => data?.scenes.filter((scene) => scene.videoUrl).length ?? 0,
     [data?.scenes]
@@ -226,11 +259,11 @@ export default function CreativeLeadPage() {
             onSubmit={(event) => {
               event.preventDefault();
               const formData = new FormData(event.currentTarget);
-              void post(`/api/leads/${leadId}/creative/photo`, "photo", formData);
+              void uploadPhotoAndQueue(formData);
             }}
           >
             <input className="input" type="file" name="photo" accept="image/png,image/jpeg,image/webp" required />
-            <button className="button" style={{ marginTop: "12px", width: "100%" }} disabled={!!busy}>{busy === "photo" ? "Uploading..." : "Upload Photo"}</button>
+            <button className="button" style={{ marginTop: "12px", width: "100%" }} disabled={!!busy}>{busy === "photo" ? "Starting..." : "Upload Photo + Queue"}</button>
           </form>
         </section>
 

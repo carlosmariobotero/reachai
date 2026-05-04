@@ -64,6 +64,34 @@ The worker should process each task like this:
 
 Until this worker is connected, the operator can still paste those values manually in the creative review page. Once connected, the manual fields become a fallback and QA surface.
 
+## Queue pickup endpoint
+
+The app exposes one worker pickup endpoint:
+
+```http
+GET /api/creative/worker/next
+```
+
+It returns the next queued lead that has a real uploaded profile photo and queued scene prompts. The response includes the lead, campaign, creative job, queued scenes, and `mcpTasks` ready for a Higgsfield MCP worker.
+
+When a job is picked up, its queued scenes are marked `generating` so two workers do not create duplicate Higgsfield assets for the same lead.
+
+Use preview mode when checking the queue by hand:
+
+```http
+GET /api/creative/worker/next?peek=1
+```
+
+Preview mode returns the next task without claiming it.
+
+If `CREATIVE_WORKER_SECRET` is set in Vercel, the worker must call it with:
+
+```http
+Authorization: Bearer <CREATIVE_WORKER_SECRET>
+```
+
+If the secret is not set, the endpoint is open for MVP testing. The normal web app still cannot generate Higgsfield assets by itself; this endpoint gives the signed-in MCP worker everything it needs to generate and save the assets.
+
 ## Current constraints
 
 - Use the official Higgsfield MCP connector: `https://mcp.higgsfield.ai/mcp`.

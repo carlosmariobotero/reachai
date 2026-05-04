@@ -390,6 +390,21 @@ export async function getCreativeVideoScenes(
   return (rows ?? []).map(rowToCreativeScene);
 }
 
+export async function getQueuedCreativeVideoJobs(
+  limit = 5
+): Promise<CreativeVideoJob[]> {
+  const { data: rows, error } = await supabaseAdmin
+    .from("creative_video_jobs")
+    .select("*")
+    .eq("status", "scenes_queued" as CreativeVideoStatus)
+    .order("updated_at", { ascending: true })
+    .limit(limit)
+    .returns<CreativeVideoJobRow[]>();
+
+  if (error) throw new Error(`getQueuedCreativeVideoJobs: ${error.message}`);
+  return (rows ?? []).map(rowToCreativeJob);
+}
+
 export async function createOrUpdateCreativeVideoJob(input: {
   leadId: string;
   campaignId: string;
@@ -499,6 +514,22 @@ export async function queueCreativeVideoScenes(
     .returns<CreativeVideoSceneRow[]>();
 
   if (error) throw new Error(`queueCreativeVideoScenes: ${error.message}`);
+  return (data ?? []).map(rowToCreativeScene);
+}
+
+export async function claimQueuedCreativeVideoScenes(
+  leadId: string
+): Promise<CreativeVideoScene[]> {
+  const { data, error } = await supabaseAdmin
+    .from("creative_video_scenes")
+    .update({ status: "generating", updated_at: new Date().toISOString() })
+    .eq("lead_id", leadId)
+    .eq("status", "queued")
+    .select()
+    .order("scene_number", { ascending: true })
+    .returns<CreativeVideoSceneRow[]>();
+
+  if (error) throw new Error(`claimQueuedCreativeVideoScenes: ${error.message}`);
   return (data ?? []).map(rowToCreativeScene);
 }
 
