@@ -27,6 +27,8 @@ export async function POST(
       ? Math.min(Math.max(Math.round(requestedCount), 1), 25)
       : 5;
 
+    const leadsBefore = await getLeadsByCampaign(id);
+
     await updateCampaignStatus(id, "scraping");
 
     const scrapeResult = await executeTool("scrape_leads", {
@@ -49,19 +51,24 @@ export async function POST(
     }
 
     const leads = await getLeadsByCampaign(id);
+    const resultData = scrapeResult.data as { leads_created?: number } | undefined;
+    const added = resultData?.leads_created ?? Math.max(leads.length - leadsBefore.length, 0);
     const existingTarget = campaign.leadCount || 0;
-    const nextTarget = Math.max(existingTarget + leadCount, leads.length);
+    const nextTarget = Math.max(existingTarget + added, leads.length);
     await updateCampaignLeadTarget(id, nextTarget);
     await updateCampaignStatus(id, "active", { totalLeads: leads.length });
-    const resultData = scrapeResult.data as { leads_created?: number } | undefined;
 
     return NextResponse.json({
       ok: true,
-      added: resultData?.leads_created ?? 0,
+      requested: leadCount,
+      added,
       totalLeads: leads.length,
       leadTarget: nextTarget,
       linkedinRequired: true,
-      message: "New LinkedIn-ready leads were added to this campaign.",
+      message:
+        added > 0
+          ? "New LinkedIn-ready leads were added to this campaign."
+          : "Apollo finished, but no new LinkedIn-ready leads were saved.",
     });
   } catch (error) {
     console.error("Error adding campaign leads:", error);

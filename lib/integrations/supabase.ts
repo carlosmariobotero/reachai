@@ -282,6 +282,15 @@ export async function getLead(id: string): Promise<Lead | null> {
   return rowToLead(row);
 }
 
+export async function deleteLead(id: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("leads")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw new Error(`deleteLead: ${error.message}`);
+}
+
 export async function updateLeadStatus(
   id: string,
   status: LeadStatus

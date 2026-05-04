@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHyperframesComposition } from "../../../../../../lib/creative/hyperframes";
+import {
+  createHyperframesComposition,
+  createHyperframesManifest,
+} from "../../../../../../lib/creative/hyperframes";
 import {
   createOrUpdateCreativeVideoJob,
   getCampaign,
@@ -51,11 +54,23 @@ export async function POST(
       job,
       scenes,
     });
+    const manifest = createHyperframesManifest({
+      campaign,
+      lead,
+      job,
+      scenes,
+    });
     const compositionUrl = await uploadAsset({
       bucket: "creative-assets",
       path: `hyperframes/${leadId}/composition.html`,
       body: composition,
       contentType: "text/html; charset=utf-8",
+    });
+    const manifestUrl = await uploadAsset({
+      bucket: "creative-assets",
+      path: `hyperframes/${leadId}/manifest.json`,
+      body: JSON.stringify(manifest, null, 2),
+      contentType: "application/json; charset=utf-8",
     });
 
     const updatedJob = await createOrUpdateCreativeVideoJob({
@@ -68,8 +83,10 @@ export async function POST(
     return NextResponse.json({
       job: updatedJob,
       compositionUrl,
+      manifestUrl,
+      manifest,
       renderInstructions:
-        "Open this composition with HyperFrames and render it to MP4. Save the final MP4 URL back to finalVideoUrl.",
+        "HyperFrames package is ready. Render the composition to MP4, then upload or paste the final MP4 for approval.",
     });
   } catch (error) {
     console.error("Error creating HyperFrames composition:", error);

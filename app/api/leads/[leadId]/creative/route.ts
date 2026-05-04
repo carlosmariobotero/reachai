@@ -27,7 +27,16 @@ export async function GET(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ lead, campaign, job, scenes });
+    const jobWithRenderLinks = job
+      ? {
+          ...job,
+          hyperframesManifestUrl: job.hyperframesCompositionUrl
+            ? job.hyperframesCompositionUrl.replace(/composition\.html$/, "manifest.json")
+            : undefined,
+        }
+      : null;
+
+    return NextResponse.json({ lead, campaign, job: jobWithRenderLinks, scenes });
   } catch (error) {
     console.error("Error loading creative package:", error);
     return NextResponse.json(

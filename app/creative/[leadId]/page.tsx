@@ -31,6 +31,7 @@ type Job = {
   outreachMessage?: string;
   voiceoverUrl?: string;
   hyperframesCompositionUrl?: string;
+  hyperframesManifestUrl?: string;
   finalVideoUrl?: string;
 };
 
@@ -104,6 +105,7 @@ export default function CreativeLeadPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [sceneInputs, setSceneInputs] = useState<Record<string, SceneInput>>({});
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
+  const [finalVideoFile, setFinalVideoFile] = useState<File | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/leads/${leadId}/creative`);
@@ -240,6 +242,31 @@ export default function CreativeLeadPage() {
       }),
     });
     await load();
+  };
+
+  const uploadFinalVideo = async () => {
+    if (!finalVideoFile) return;
+    setBusy("final-video");
+    setMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("video", finalVideoFile);
+      formData.append("approve", "true");
+      const res = await fetch(`/api/leads/${leadId}/creative/final-video`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Final video upload failed");
+      setFinalVideoUrl(json.finalVideoUrl ?? "");
+      setFinalVideoFile(null);
+      setMessage("Final MP4 uploaded and approved.");
+      await load();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Final video upload failed");
+    } finally {
+      setBusy(null);
+    }
   };
 
   if (loading) {
@@ -454,10 +481,28 @@ export default function CreativeLeadPage() {
             </div>
             {data.job?.voiceoverUrl && <audio controls src={data.job.voiceoverUrl} style={{ width: "100%", marginTop: "14px" }} />}
             {data.job?.hyperframesCompositionUrl && (
-              <p style={{ fontSize: "13px", marginTop: "14px" }}>
-                Composition: <a href={data.job.hyperframesCompositionUrl} target="_blank" style={{ color: "#BEFF00" }}>Open HyperFrames HTML</a>
-              </p>
+              <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
+                <p style={{ fontSize: "13px", margin: 0 }}>
+                  Composition: <a href={data.job.hyperframesCompositionUrl} target="_blank" style={{ color: "#BEFF00" }}>Open HyperFrames HTML</a>
+                </p>
+                {data.job.hyperframesManifestUrl && (
+                  <p style={{ fontSize: "13px", margin: 0 }}>
+                    Manifest: <a href={data.job.hyperframesManifestUrl} target="_blank" style={{ color: "#BEFF00" }}>Open render JSON</a>
+                  </p>
+                )}
+              </div>
             )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", marginTop: "14px" }}>
+              <input
+                className="input"
+                type="file"
+                accept="video/mp4,video/quicktime,video/webm"
+                onChange={(event) => setFinalVideoFile(event.currentTarget.files?.[0] ?? null)}
+              />
+              <button className="button" disabled={!!busy || !finalVideoFile} onClick={() => void uploadFinalVideo()}>
+                {busy === "final-video" ? "Uploading..." : "Upload Final MP4"}
+              </button>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", marginTop: "14px" }}>
               <input className="input" placeholder="Final MP4 URL after HyperFrames render" value={finalVideoUrl} onChange={(e) => setFinalVideoUrl(e.target.value)} />
               <button className="button" disabled={!!busy || !finalVideoUrl} onClick={() => post(`/api/leads/${leadId}/creative/approve`, "approve", JSON.stringify({ finalVideoUrl }), { "Content-Type": "application/json" })}>{busy === "approve" ? "Approving..." : "Approve"}</button>

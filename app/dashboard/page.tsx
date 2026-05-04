@@ -64,6 +64,9 @@ const css = `
   .pill-btn:hover { border-color: ${G}44; color: ${G}; }
   .pill-btn.primary { border-color: ${G}; color: ${G}; }
   .pill-btn.primary:hover { background: ${G}; color: #000; }
+  .pill-btn.danger { border-color: #3A1D12; color: #F07B5D; }
+  .pill-btn.danger:hover { border-color: #F07B5D; background: #F07B5D; color: #000; }
+  .pill-btn:disabled { opacity: 0.45; cursor: wait; }
 
   .search-input {
     background: #080808; border: 1px solid #141414; border-radius: 2px;
@@ -291,7 +294,9 @@ export default function Dashboard() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [dashboardNotice, setDashboardNotice] = useState<string | null>(null);
   const [uploadingLeadId, setUploadingLeadId] = useState<string | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [addingLeads, setAddingLeads] = useState(false);
+  const [queueingVideos, setQueueingVideos] = useState(false);
   const [addLeadCount, setAddLeadCount] = useState(5);
 
   const fetchCampaigns = useCallback(async () => {
@@ -379,6 +384,75 @@ export default function Dashboard() {
       setUploadingLeadId(null);
     }
   }, [activeCampaign, fetchLeads]);
+
+  const queueCampaignVideos = useCallback(async () => {
+    if (!activeCampaign) return;
+    setQueueingVideos(true);
+    setDashboardNotice(null);
+    try {
+      const res = await fetch(`/api/campaigns/${activeCampaign.id}/creative/automate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 10 }),
+      });
+      const data = await res.json() as {
+        queued?: number;
+        skipped?: number;
+        failed?: number;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        setDashboardError(data.error ?? "Could not queue campaign videos");
+        return;
+      }
+      setDashboardNotice(
+        `${data.message ?? "Campaign video automation queued."} Skipped: ${data.skipped ?? 0}. Failed: ${data.failed ?? 0}.`
+      );
+      await Promise.all([fetchCampaigns(), fetchLeads(activeCampaign.id)]);
+      setDashboardError(null);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Could not queue campaign videos");
+    } finally {
+      setQueueingVideos(false);
+    }
+  }, [activeCampaign, fetchCampaigns, fetchLeads]);
+
+  const deleteCampaignLead = useCallback(async (lead: DashLead) => {
+    if (!activeCampaign) return;
+
+    const confirmed = window.confirm(
+      `Delete ${lead.name} from this campaign? This removes the lead and any creative work attached to them.`
+    );
+    if (!confirmed) return;
+
+    setDeletingLeadId(lead.id);
+    setDashboardNotice(null);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}`, { method: "DELETE" });
+      const data = await res.json() as { totalLeads?: number; error?: string };
+      if (!res.ok) {
+        setDashboardError(data.error ?? "Could not delete lead");
+        return;
+      }
+
+      setDashboardNotice(`${lead.name} was removed from the campaign.`);
+      setActiveCampaign((current) => current
+        ? {
+            ...current,
+            leads: data.totalLeads ?? Math.max(0, current.leads - 1),
+            scraped: data.totalLeads ?? Math.max(0, current.scraped - 1),
+          }
+        : current
+      );
+      await Promise.all([fetchCampaigns(), fetchLeads(activeCampaign.id)]);
+      setDashboardError(null);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Could not delete lead");
+    } finally {
+      setDeletingLeadId(null);
+    }
+  }, [activeCampaign, fetchCampaigns, fetchLeads]);
 
   // Initial load + polling for campaign list
   useEffect(() => {
@@ -586,6 +660,9 @@ export default function Dashboard() {
                   Leads <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT2, fontSize: "12px", marginLeft: "8px" }}>{activeLeads.length}</span>
                 </p>
                 <div style={{ display: "flex", gap: "8px" }}>
+                  <button className="pill-btn" onClick={() => window.open(`/client/${activeCampaign.id}`, "_blank", "noopener,noreferrer")}>
+                    Client Page
+                  </button>
                   <input
                     type="number"
                     min="1"
@@ -608,7 +685,9 @@ export default function Dashboard() {
                     {addingLeads ? "Adding..." : "Add Leads"}
                   </button>
                   <button className="pill-btn">Export CSV</button>
-                  <button className="pill-btn primary">Run All Videos</button>
+                  <button className="pill-btn primary" disabled={queueingVideos} onClick={queueCampaignVideos}>
+                    {queueingVideos ? "Queueing..." : "Run All Videos"}
+                  </button>
                 </div>
               </div>
               <div className="lead-row header">
@@ -621,10 +700,10 @@ export default function Dashboard() {
                   <p style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#1A1A1A", letterSpacing: "0.1em" }}>No leads yet.</p>
                 </div>
               ) : (
-                activeLeads.map((lead, i) => {
+                activeLeads.map((lead) => {
                   const st = LEAD_STATUS[lead.status] ?? LEAD_STATUS.scraped;
                   return (
-                    <div key={i} className="lead-row">
+                    <div key={lead.id} className="lead-row">
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <div className="avatar" style={{ background: "#0D0D0D", color: TEXT2, width: "28px", height: "28px", fontSize: "9px" }}>
                           {lead.name.split(" ").map((n) => n[0]).join("")}
@@ -643,7 +722,7 @@ export default function Dashboard() {
                       <span className="status-badge" style={{ background: `${st.color}12`, color: st.color, fontSize: "10px", width: "fit-content" }}>
                         {st.label}
                       </span>
-                      <div style={{ display: "flex", gap: "6px" }}>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                         <label className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px", borderColor: lead.profilePhotoUrl ? `${G}44` : "#1A1A1A", color: lead.profilePhotoUrl ? G : "#555" }} onClick={(e) => e.stopPropagation()}>
                           {uploadingLeadId === lead.id ? "Uploading..." : lead.profilePhotoUrl ? "Photo Ready" : "Upload Photo"}
                           <input
@@ -664,6 +743,17 @@ export default function Dashboard() {
                         ) : (
                           <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px" }} onClick={(e) => { e.stopPropagation(); window.location.href = `/creative/${lead.id}`; }}>Creative</button>
                         )}
+                        <button
+                          className="pill-btn danger"
+                          disabled={deletingLeadId === lead.id}
+                          style={{ padding: "4px 10px", fontSize: "10px" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteCampaignLead(lead);
+                          }}
+                        >
+                          {deletingLeadId === lead.id ? "Deleting..." : "Delete"}
+                        </button>
                       </div>
                     </div>
                   );

@@ -100,10 +100,84 @@ Authorization: Bearer <CREATIVE_WORKER_SECRET>
 
 If the secret is not set, the endpoint is open for MVP testing. The normal web app still cannot generate Higgsfield assets by itself; this endpoint gives the signed-in MCP worker everything it needs to generate and save the assets.
 
+## Worker scene update endpoint
+
+Workers can save generated assets without using the operator UI route:
+
+```http
+PATCH /api/creative/worker/scenes/:sceneId
+Content-Type: application/json
+Authorization: Bearer <CREATIVE_WORKER_SECRET>
+
+{
+  "status": "ready",
+  "higgsfieldMediaId": "uploaded-media-id",
+  "stillImageJobId": "gpt-image-2-job-id",
+  "stillImageUrl": "https://...",
+  "videoJobId": "animation-job-id",
+  "videoUrl": "https://..."
+}
+```
+
+When every scene for a lead is marked `ready`, the app automatically moves the creative job to `scenes_ready`. If a worker marks a scene `failed`, the creative job is marked `failed` so the operator can inspect and requeue.
+
+## Campaign-level queueing
+
+The operator dashboard's `Run All Videos` button calls:
+
+```http
+POST /api/campaigns/:campaignId/creative/automate
+Content-Type: application/json
+
+{
+  "limit": 10
+}
+```
+
+This generates missing creative briefs and queues Higgsfield scenes for photo-ready leads in that campaign. It preserves the hard gates:
+
+- Leads without LinkedIn are skipped.
+- Leads without uploaded profile photos are skipped.
+- Leads with scenes already queued, generating, or ready are skipped.
+
+This makes the operator flow scalable: add/verify/upload photos in the campaign table, click `Run All Videos`, then let the MCP worker claim jobs through `/api/creative/worker/next?claim=1`.
+
+## HyperFrames final assembly
+
+Once a lead has all three scene videos and a voiceover, the creative page can create a HyperFrames render package:
+
+```http
+POST /api/leads/:leadId/creative/render
+```
+
+The route uploads:
+
+- `hyperframes/:leadId/composition.html` — the HTML composition for HyperFrames.
+- `hyperframes/:leadId/manifest.json` — render metadata, scene timing, output name, and source URLs.
+
+The current composition is a 1920x1080, 30fps, under-30-second edit. It layers:
+
+- The 3 silent Higgsfield scene videos.
+- Lower-third captions from the creative brief.
+- The ElevenLabs narrator voiceover.
+- A light ReachAI/meta overlay and closing CTA.
+
+After rendering in HyperFrames, upload the final MP4 back through the creative page or call:
+
+```http
+POST /api/leads/:leadId/creative/final-video
+Content-Type: multipart/form-data
+
+video=<final mp4 file>
+approve=true
+```
+
+That stores the final video in Supabase, saves it on the lead, and marks the creative job approved when `approve=true`.
+
 ## Current constraints
 
 - Use the official Higgsfield MCP connector: `https://mcp.higgsfield.ai/mcp`.
 - Do not use the older Higgsfield API-key MCP package for this workflow.
 - Do not use Soul 2 for lead likeness stills unless explicitly testing; use GPT Image 2.
 - The app stores assets in the Supabase `creative-assets` bucket.
-- Local rendering needs HyperFrames and an environment that can bind/run the renderer.
+- Local rendering needs HyperFrames plus FFmpeg/FFprobe. This machine currently does not have FFmpeg installed, and running `npx hyperframes` inside the credentialed app workspace should be done only from a clean renderer environment.

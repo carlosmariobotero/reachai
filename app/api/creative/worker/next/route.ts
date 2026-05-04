@@ -8,6 +8,7 @@ import {
   getCreativeVideoScenes,
   getLead,
   getQueuedCreativeVideoJobs,
+  updateLeadStatus,
 } from "../../../../../lib/integrations/supabase";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
           campaignId: job.campaignId,
           status: "scenes_generating",
         });
+        await updateLeadStatus(job.leadId, "video_generating");
       }
 
       return NextResponse.json({
