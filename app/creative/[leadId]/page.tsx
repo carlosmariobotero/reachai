@@ -80,6 +80,21 @@ const css = `
   .textarea { width: 100%; min-height: 88px; resize: vertical; background: #050505; border: 1px solid #181818; color: #ddd; padding: 12px; border-radius: 2px; font: 12px/1.5 'JetBrains Mono', monospace; }
 `;
 
+function getSceneStatusTone(status: string) {
+  switch (status) {
+    case "ready":
+      return "#BEFF00";
+    case "generating":
+      return "#F7C948";
+    case "queued":
+      return "#6EE7F9";
+    case "failed":
+      return "#F07B5D";
+    default:
+      return "#555";
+  }
+}
+
 export default function CreativeLeadPage() {
   const params = useParams() as { leadId: string };
   const leadId = params.leadId;
@@ -106,6 +121,24 @@ export default function CreativeLeadPage() {
     });
   }, [load]);
 
+  useEffect(() => {
+    if (!data) return;
+
+    const shouldPoll = data.scenes.some(
+      (scene) => scene.status === "queued" || scene.status === "generating"
+    );
+
+    if (!shouldPoll) return;
+
+    const interval = window.setInterval(() => {
+      void load().catch(() => {
+        // Keep the current screen stable if one refresh fails.
+      });
+    }, 7000);
+
+    return () => window.clearInterval(interval);
+  }, [data, load]);
+
   const post = async (path: string, label: string, body?: BodyInit, headers?: HeadersInit) => {
     setBusy(label);
     setMessage(null);
@@ -116,7 +149,9 @@ export default function CreativeLeadPage() {
       if (json.automationMessage) {
         setMessage(json.automationMessage);
       } else if (json.mcpTasks) {
-        setMessage(`Queued ${json.mcpTasks.length} Higgsfield MCP scene jobs for GPT Image 2 stills and animation.`);
+        setMessage(
+          `${json.mcpTasks.length} scene jobs are ready. This page will update automatically as the stills and videos come back.`
+        );
       } else if (json.renderInstructions) {
         setMessage(json.renderInstructions);
       } else {
@@ -226,6 +261,43 @@ export default function CreativeLeadPage() {
   }
 
   const leadName = `${data.lead.firstName} ${data.lead.lastName}`;
+  const queuedScenes = data.scenes.filter((scene) => scene.status === "queued").length;
+  const generatingScenes = data.scenes.filter(
+    (scene) => scene.status === "generating"
+  ).length;
+  const failedScenes = data.scenes.filter((scene) => scene.status === "failed").length;
+  const hasQueuedScenes = queuedScenes > 0;
+  const hasGeneratingScenes = generatingScenes > 0;
+  const hasActiveSceneRun = hasQueuedScenes || hasGeneratingScenes;
+  const hasScenePlan = data.scenes.length > 0;
+
+  const friendlyStatus = hasGeneratingScenes
+    ? "Creating scene images and videos"
+    : hasQueuedScenes
+      ? "Waiting for Higgsfield generation"
+      : data.job?.status === "scenes_ready"
+        ? "Scenes finished"
+        : data.job?.status === "voiceover_ready"
+          ? "Voiceover ready"
+          : data.job?.status === "render_ready"
+            ? "Final edit ready"
+            : data.job?.status === "approved"
+              ? "Approved"
+              : data.job?.status === "prompt_ready"
+                ? "Scene prompts ready"
+                : data.job?.status === "research_ready"
+                  ? "Research ready"
+                  : data.job?.status ?? "No creative job yet";
+
+  const statusDetail = hasGeneratingScenes
+    ? "A Higgsfield worker has already picked this lead up. This page refreshes automatically while the scene stills and videos are being created."
+    : hasQueuedScenes
+      ? "This lead is fully prepared and waiting for the Higgsfield worker to start generating the scene stills and videos."
+      : data.job?.status === "scenes_ready"
+        ? "All three scene videos are back. Voiceover and final assembly can continue."
+        : data.job?.status === "prompt_ready"
+          ? "Research and prompts are ready. The next real step is starting scene generation."
+          : "Upload a photo, generate the brief, then start the scene run.";
 
   return (
     <div id="creative-root">
@@ -239,12 +311,22 @@ export default function CreativeLeadPage() {
         </div>
         <div className="panel" style={{ minWidth: "240px" }}>
           <p className="mono muted" style={{ fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase", marginBottom: "8px" }}>Status</p>
-          <p style={{ margin: 0, color: "#BEFF00", fontWeight: 800 }}>{data.job?.status ?? "No creative job yet"}</p>
+          <p style={{ margin: 0, color: "#BEFF00", fontWeight: 800 }}>{friendlyStatus}</p>
+          <p className="muted" style={{ margin: "10px 0 0", fontSize: "12px", lineHeight: 1.5 }}>{statusDetail}</p>
+          <p className="mono muted" style={{ margin: "12px 0 0", fontSize: "11px" }}>
+            {readyScenes} ready · {generatingScenes} generating · {queuedScenes} waiting · {failedScenes} failed
+          </p>
         </div>
       </header>
 
       {message && (
         <div className="panel" style={{ borderColor: "#27330A", color: "#BEFF00", marginBottom: "18px", fontSize: "13px", lineHeight: 1.5 }}>{message}</div>
+      )}
+
+      {hasGeneratingScenes && (
+        <div className="panel" style={{ borderColor: "#4F3F08", color: "#F7C948", marginBottom: "18px", fontSize: "13px", lineHeight: 1.5 }}>
+          Higgsfield generation is running now. The screen refreshes automatically every few seconds, and each scene will fill in as soon as its still image and video are saved back.
+        </div>
       )}
 
       <main style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "18px", alignItems: "start" }}>
@@ -263,7 +345,9 @@ export default function CreativeLeadPage() {
             }}
           >
             <input className="input" type="file" name="photo" accept="image/png,image/jpeg,image/webp" required />
-            <button className="button" style={{ marginTop: "12px", width: "100%" }} disabled={!!busy}>{busy === "photo" ? "Starting..." : "Upload Photo + Queue"}</button>
+            <button className="button" style={{ marginTop: "12px", width: "100%" }} disabled={!!busy || hasActiveSceneRun}>
+              {busy === "photo" ? "Starting..." : hasActiveSceneRun ? "Generation Already Running" : "Upload Photo + Queue"}
+            </button>
           </form>
         </section>
 
@@ -275,8 +359,12 @@ export default function CreativeLeadPage() {
                 <p className="muted" style={{ fontSize: "13px", marginBottom: 0 }}>{data.campaign.clientName} · {data.campaign.websiteUrl}</p>
               </div>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <button className="button" disabled={!!busy} onClick={() => post(`/api/leads/${leadId}/creative/research`, "brief")}>{busy === "brief" ? "Working..." : "Generate Brief"}</button>
-                <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl} onClick={() => post(`/api/leads/${leadId}/creative/automate`, "automate")}>{busy === "automate" ? "Starting..." : "Run Lead Automation"}</button>
+                <button className="button" disabled={!!busy || hasActiveSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/research`, "brief")}>
+                  {busy === "brief" ? "Working..." : hasActiveSceneRun ? "Brief Locked During Generation" : "Generate Brief"}
+                </button>
+                <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || hasActiveSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/automate`, "automate")}>
+                  {busy === "automate" ? "Starting..." : hasActiveSceneRun ? "Lead Automation Already Running" : "Run Lead Automation"}
+                </button>
               </div>
             </div>
             {data.job && (
@@ -305,9 +393,13 @@ export default function CreativeLeadPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", marginBottom: "14px" }}>
               <div>
                 <p className="mono muted" style={{ fontSize: "10px", letterSpacing: ".12em", textTransform: "uppercase" }}>Higgsfield Scenes</p>
-                <p className="muted" style={{ fontSize: "13px", margin: 0 }}>{readyScenes} / 3 animated scene videos ready</p>
+                <p className="muted" style={{ fontSize: "13px", margin: 0 }}>
+                  {readyScenes} / 3 animated scene videos ready · {generatingScenes} generating · {queuedScenes} waiting
+                </p>
               </div>
-              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>{busy === "scenes" ? "Queueing..." : "Queue Higgsfield Automation"}</button>
+              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job || !hasScenePlan || hasActiveSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>
+                {busy === "scenes" ? "Queueing..." : hasGeneratingScenes ? "Higgsfield Is Generating" : hasQueuedScenes ? "Already Waiting For Higgsfield" : "Queue Higgsfield Automation"}
+              </button>
             </div>
 
             <div style={{ display: "grid", gap: "12px" }}>
@@ -315,10 +407,20 @@ export default function CreativeLeadPage() {
                 <div key={scene.id} style={{ border: "1px solid #141414", padding: "14px", borderRadius: "4px", background: "#050505" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
                     <p style={{ margin: 0, fontWeight: 800 }}>Scene {scene.sceneNumber}: {scene.objective}</p>
-                    <span className="mono" style={{ color: scene.videoUrl ? "#BEFF00" : "#555", fontSize: "11px" }}>{scene.status}</span>
+                    <span className="mono" style={{ color: getSceneStatusTone(scene.status), fontSize: "11px" }}>{scene.status}</span>
                   </div>
                   <p className="muted" style={{ fontSize: "12px", lineHeight: 1.5 }}>{scene.higgsfieldPrompt}</p>
                   <p style={{ fontSize: "13px", color: "#BEFF00" }}>{scene.captionText}</p>
+                  {scene.status === "queued" && (
+                    <p className="muted" style={{ fontSize: "12px", marginTop: 0 }}>
+                      This scene is ready and waiting for Higgsfield to start.
+                    </p>
+                  )}
+                  {scene.status === "generating" && (
+                    <p style={{ fontSize: "12px", color: "#F7C948", marginTop: 0 }}>
+                      Higgsfield is currently creating this still and video.
+                    </p>
+                  )}
                   {scene.stillImageUrl && (
                     <img src={scene.stillImageUrl} alt={`Scene ${scene.sceneNumber} still`} style={{ width: "100%", borderRadius: "4px", marginBottom: "10px", border: "1px solid #181818" }} />
                   )}

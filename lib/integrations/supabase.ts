@@ -405,6 +405,24 @@ export async function getQueuedCreativeVideoJobs(
   return (rows ?? []).map(rowToCreativeJob);
 }
 
+export async function getActiveCreativeVideoJobs(
+  limit = 5
+): Promise<CreativeVideoJob[]> {
+  const { data: rows, error } = await supabaseAdmin
+    .from("creative_video_jobs")
+    .select("*")
+    .in("status", [
+      "scenes_generating" as CreativeVideoStatus,
+      "scenes_ready" as CreativeVideoStatus,
+    ])
+    .order("updated_at", { ascending: false })
+    .limit(limit)
+    .returns<CreativeVideoJobRow[]>();
+
+  if (error) throw new Error(`getActiveCreativeVideoJobs: ${error.message}`);
+  return (rows ?? []).map(rowToCreativeJob);
+}
+
 export async function createOrUpdateCreativeVideoJob(input: {
   leadId: string;
   campaignId: string;

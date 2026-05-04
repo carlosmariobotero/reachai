@@ -82,7 +82,15 @@ Use preview mode when checking the queue by hand:
 GET /api/creative/worker/next?peek=1
 ```
 
-Preview mode returns the next task without claiming it.
+Preview mode returns the next task without claiming it. If nothing is still waiting in the queue but a worker already claimed a lead, preview mode returns that active lead with `mode: "active"` so the operator can see that generation is already underway.
+
+Use claim mode only from the real worker:
+
+```http
+GET /api/creative/worker/next?claim=1
+```
+
+Without `claim=1`, browser-opened requests stay in preview mode unless the request is authenticated with a worker secret.
 
 If `CREATIVE_WORKER_SECRET` is set in Vercel, the worker must call it with:
 

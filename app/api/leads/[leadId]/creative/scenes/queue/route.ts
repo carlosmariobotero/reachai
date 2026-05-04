@@ -45,7 +45,7 @@ export async function POST(
       scenes,
       mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes),
       automationMessage:
-        "Higgsfield scene jobs are queued for the MCP worker. The worker must run in a Codex/Claude session that is signed in to Higgsfield MCP, then write each GPT Image 2 still and animation URL back to these scene records.",
+        "The 3 scene jobs are now waiting to start. Once the connected Higgsfield generator picks them up, this page will change to creating and then fill in each still and video automatically.",
       automationMode: "mcp_worker_required",
     });
   } catch (error) {

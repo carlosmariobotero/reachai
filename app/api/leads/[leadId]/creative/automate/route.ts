@@ -78,7 +78,7 @@ export async function POST(
       scenes,
       mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes),
       automationMessage:
-        "Lead automation is queued. The creative brief and scene prompts are ready; an authenticated Higgsfield MCP worker can now create GPT Image 2 stills from the real profile photo, animate the scenes, and save the finished URLs back here.",
+        "The brief is ready and the 3 scene jobs are lined up. As soon as the connected Higgsfield generator starts, this page will switch to creating the stills and videos automatically.",
       automationMode: "mcp_worker_required",
     });
   } catch (error) {

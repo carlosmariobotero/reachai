@@ -169,6 +169,7 @@ export type CreativeVideoStatus =
   | "research_ready"
   | "prompt_ready"
   | "scenes_queued"
+  | "scenes_generating"
   | "scenes_ready"
   | "voiceover_ready"
   | "render_ready"

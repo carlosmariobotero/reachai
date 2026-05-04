@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildHiggsfieldMcpTasks } from "../../../../../lib/creative/higgsfield-mcp";
 import {
   claimQueuedCreativeVideoScenes,
+  createOrUpdateCreativeVideoJob,
+  getActiveCreativeVideoJobs,
   getCampaign,
   getCreativeVideoScenes,
   getLead,
@@ -28,7 +30,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const shouldClaim = request.nextUrl.searchParams.get("peek") !== "1";
+    const hasWorkerSecret = Boolean(process.env.CREATIVE_WORKER_SECRET?.trim());
+    const isPeek = request.nextUrl.searchParams.get("peek") === "1";
+    const claimRequested = request.nextUrl.searchParams.get("claim") === "1";
+    const shouldClaim = !isPeek && (hasWorkerSecret || claimRequested);
     const jobs = await getQueuedCreativeVideoJobs(10);
 
     for (const job of jobs) {
@@ -54,15 +59,56 @@ export async function GET(request: NextRequest) {
 
       if (workerScenes.length === 0) continue;
 
+      let responseJob = job;
+      if (shouldClaim) {
+        responseJob = await createOrUpdateCreativeVideoJob({
+          leadId: job.leadId,
+          campaignId: job.campaignId,
+          status: "scenes_generating",
+        });
+      }
+
       return NextResponse.json({
         ok: true,
         mode: shouldClaim ? "claimed" : "peek",
         lead,
         campaign,
-        job,
+        job: responseJob,
         scenes: workerScenes,
         mcpTasks: buildHiggsfieldMcpTasks(lead, job, workerScenes),
       });
+    }
+
+    if (isPeek) {
+      const activeJobs = await getActiveCreativeVideoJobs(10);
+
+      for (const job of activeJobs) {
+        const [lead, campaign, scenes] = await Promise.all([
+          getLead(job.leadId),
+          getCampaign(job.campaignId),
+          getCreativeVideoScenes(job.leadId),
+        ]);
+
+        if (!lead || !campaign) continue;
+
+        const activeScenes = scenes.filter(
+          (scene) => scene.status === "generating" || scene.status === "ready"
+        );
+
+        if (activeScenes.length === 0) continue;
+
+        return NextResponse.json({
+          ok: true,
+          mode: "active",
+          lead,
+          campaign,
+          job,
+          scenes: activeScenes,
+          mcpTasks: buildHiggsfieldMcpTasks(lead, job, activeScenes),
+          message:
+            "A Higgsfield worker already claimed this lead. These scenes are in progress or already finished.",
+        });
+      }
     }
 
     return NextResponse.json({
@@ -72,7 +118,9 @@ export async function GET(request: NextRequest) {
       job: null,
       scenes: [],
       mcpTasks: [],
-      message: "No queued creative scenes are ready for the MCP worker.",
+      message: shouldClaim
+        ? "No queued creative scenes are waiting to be claimed."
+        : "No queued creative scenes are ready for preview.",
     });
   } catch (error) {
     return NextResponse.json(
