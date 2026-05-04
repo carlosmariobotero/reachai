@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import type { AgentToolResult } from "../types";
 import {
   createLead,
+  getLeadsByCampaign,
   saveLeadResearch,
   saveLeadScript,
   updateLeadStatus,
@@ -431,16 +432,26 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
     marketKeywords,
   });
   const linkedinReadyPeople = people.filter((person) => qualifiedApolloLead(person, jobTitles));
+  const existingLeads = await getLeadsByCampaign(campaignId);
+  const existingLinkedInUrls = new Set(
+    existingLeads
+      .map((lead) => lead.linkedinUrl?.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const newLinkedInReadyPeople = linkedinReadyPeople.filter((person) => {
+    const linkedinUrl = linkedinUrlFor(person).trim().toLowerCase();
+    return linkedinUrl && !existingLinkedInUrls.has(linkedinUrl);
+  });
 
-  if (linkedinReadyPeople.length === 0) {
+  if (newLinkedInReadyPeople.length === 0) {
     throw new Error(
-      "Apollo found people, but none passed the high-ticket lead quality gate. No leads were saved because ReachAI requires LinkedIn, exact title relevance, and a real company signal."
+      "Apollo found people, but none were new high-quality LinkedIn-ready leads for this campaign. No duplicate or weak leads were saved."
     );
   }
 
   const created: string[] = [];
 
-  for (const person of linkedinReadyPeople) {
+  for (const person of newLinkedInReadyPeople) {
     const org = organizationFor(person);
     const lead = await createLead({
       campaignId,
@@ -464,6 +475,7 @@ async function scrapeLeads(input: Record<string, unknown>): Promise<AgentToolRes
       quality_gate: "linkedin + exact requested title + real company signal",
       market_keywords: marketKeywords,
       candidates_found: people.length,
+      duplicates_skipped: linkedinReadyPeople.length - newLinkedInReadyPeople.length,
     },
   };
 }

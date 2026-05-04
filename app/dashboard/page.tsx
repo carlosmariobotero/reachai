@@ -289,7 +289,10 @@ export default function Dashboard() {
   const [activeCampaign, setActiveCampaign] = useState<DashCampaign | null>(null);
   const [activeLeads, setActiveLeads] = useState<DashLead[]>([]);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [dashboardNotice, setDashboardNotice] = useState<string | null>(null);
   const [uploadingLeadId, setUploadingLeadId] = useState<string | null>(null);
+  const [addingLeads, setAddingLeads] = useState(false);
+  const [addLeadCount, setAddLeadCount] = useState(5);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -320,6 +323,39 @@ export default function Dashboard() {
       setDashboardError(error instanceof Error ? error.message : "Could not load leads");
     }
   }, []);
+
+  const addLeadsToCampaign = useCallback(async () => {
+    if (!activeCampaign) return;
+    setAddingLeads(true);
+    setDashboardNotice(null);
+    try {
+      const res = await fetch(`/api/campaigns/${activeCampaign.id}/leads/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadCount: addLeadCount }),
+      });
+      const data = await res.json() as { added?: number; totalLeads?: number; error?: string; message?: string };
+      if (!res.ok) {
+        setDashboardError(data.error ?? "Could not add more leads");
+        return;
+      }
+      setDashboardNotice(`${data.added ?? 0} LinkedIn-ready leads added. Campaign now has ${data.totalLeads ?? "updated"} leads.`);
+      setActiveCampaign((current) => current
+        ? {
+            ...current,
+            leads: data.totalLeads ?? current.leads,
+            scraped: data.totalLeads ?? current.scraped,
+          }
+        : current
+      );
+      await Promise.all([fetchCampaigns(), fetchLeads(activeCampaign.id)]);
+      setDashboardError(null);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Could not add more leads");
+    } finally {
+      setAddingLeads(false);
+    }
+  }, [activeCampaign, addLeadCount, fetchCampaigns, fetchLeads]);
 
   const uploadLeadPhoto = useCallback(async (leadId: string, file: File) => {
     const formData = new FormData();
@@ -449,6 +485,12 @@ export default function Dashboard() {
           </div>
         )}
 
+        {dashboardNotice && (
+          <div style={{ margin: "16px 24px 0", border: `1px solid ${G}44`, background: `${G}08`, borderRadius: "4px", padding: "12px 14px", color: G, fontSize: "12px", lineHeight: 1.5 }}>
+            {dashboardNotice}
+          </div>
+        )}
+
         {/* ── CAMPAIGNS VIEW ── */}
         {nav === "campaigns" && !activeCampaign && (
           <div className="fade-in" style={{ flex: 1, overflow: "auto", padding: "24px" }}>
@@ -544,6 +586,27 @@ export default function Dashboard() {
                   Leads <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT2, fontSize: "12px", marginLeft: "8px" }}>{activeLeads.length}</span>
                 </p>
                 <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="number"
+                    min="1"
+                    max="25"
+                    value={addLeadCount}
+                    onChange={(e) => setAddLeadCount(Math.min(Math.max(Number(e.target.value) || 1, 1), 25))}
+                    title="How many more Apollo leads to add"
+                    style={{
+                      width: "58px",
+                      background: "#050505",
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: "2px",
+                      color: "#888",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: "11px",
+                      padding: "6px 8px",
+                    }}
+                  />
+                  <button className="pill-btn primary" disabled={addingLeads} onClick={addLeadsToCampaign}>
+                    {addingLeads ? "Adding..." : "Add Leads"}
+                  </button>
                   <button className="pill-btn">Export CSV</button>
                   <button className="pill-btn primary">Run All Videos</button>
                 </div>

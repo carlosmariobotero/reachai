@@ -215,6 +215,24 @@ export async function updateCampaignStatus(
   return rowToCampaign(row);
 }
 
+export async function updateCampaignLeadTarget(
+  id: string,
+  leadCount: number
+): Promise<Campaign> {
+  const { data: row, error } = await supabaseAdmin
+    .from("campaigns")
+    .update({
+      lead_count: leadCount,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single<CampaignRow>();
+
+  if (error) throw new Error(`updateCampaignLeadTarget: ${error.message}`);
+  return rowToCampaign(row);
+}
+
 // ─── Leads ───────────────────────────────────────────────────────────────────
 
 export async function createLead(data: CreateLeadInput): Promise<Lead> {
