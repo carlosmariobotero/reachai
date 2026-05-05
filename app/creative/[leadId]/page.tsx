@@ -182,6 +182,8 @@ export default function CreativeLeadPage() {
 
       const automationRes = await fetch(`/api/leads/${leadId}/creative/automate`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceRegenerate: true }),
       });
       const automationJson = await automationRes.json();
       if (!automationRes.ok) {
@@ -389,8 +391,17 @@ export default function CreativeLeadPage() {
                 <button className="button" disabled={!!busy || hasActiveSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/research`, "brief")}>
                   {busy === "brief" ? "Working..." : hasActiveSceneRun ? "Brief Locked During Generation" : "Generate Brief"}
                 </button>
-                <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || hasActiveSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/automate`, "automate")}>
-                  {busy === "automate" ? "Starting..." : hasActiveSceneRun ? "Lead Automation Already Running" : "Run Lead Automation"}
+                <button
+                  className="button"
+                  disabled={!!busy || !data.lead.profilePhotoUrl || hasGeneratingScenes}
+                  onClick={() => post(
+                    `/api/leads/${leadId}/creative/automate`,
+                    "automate",
+                    JSON.stringify({ forceRegenerate: true }),
+                    { "Content-Type": "application/json" }
+                  )}
+                >
+                  {busy === "automate" ? "Starting..." : hasGeneratingScenes ? "Generation In Progress" : "Run Lead Automation"}
                 </button>
               </div>
             </div>
