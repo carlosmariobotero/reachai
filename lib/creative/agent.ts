@@ -19,27 +19,58 @@ function fallbackBrief(campaign: Campaign, lead: Lead): {
   const leadName = `${lead.firstName} ${lead.lastName}`.trim();
   const company = lead.company ?? "their company";
   const title = lead.title ?? "leader";
-  const salesAngle = `${leadName} is shown as the hero who spots a growth bottleneck before competitors do.`;
+  const salesAngle = `${leadName} is treated like the protagonist of a premium short film: a leader who sees an invisible growth system before the market does.`;
+  const world = `${company} becomes a cinematic command-center world inspired by ${campaign.clientName}'s core promise: ${campaign.painPoint}`;
   const scenePlan: CreativeScenePlan[] = [
     {
       sceneNumber: 1,
       durationSeconds: 7,
-      objective: "Personalized cinematic hook",
-      higgsfieldPrompt: `${leadName}, ${title} at ${company}, looks confident in a premium cinematic business environment. The scene feels custom-made for them, polished, realistic, high-end commercial lighting, no text, no watermark.`,
+      objective: "Storyboard panel 1: mythic personalized hook",
+      higgsfieldPrompt: `GPT IMAGE 2 STILL / STORYBOARD PANEL:
+Medium/format: ultra-real cinematic keyframe from a prestige technology thriller, 16:9, photoreal, 4K detail.
+Subject/action: using the uploaded lead photo as identity reference, ${leadName}, ${title} at ${company}, stands as the protagonist inside ${world}; subtle company-relevant symbols appear as physical set pieces, not text.
+Technical specs: anamorphic lens, low-angle hero framing, shallow depth of field, layered foreground reflections, precise spatial composition.
+Lighting/color: dramatic mixed lighting, warm edge light against cool environmental glow, premium film color science, tasteful grain.
+Texture/detail: glass, metal, paper, screens, atmospheric depth, realistic skin texture, natural wardrobe, editorial production design.
+Text/typography: no readable text, no logos, no captions inside the generated image.
+Negative constraints: no cartoon look, no generic office stock photo, no distorted face, no extra fingers, no watermark.
+
+KLING 3.0 MOTION DIRECTION:
+The camera slowly dollies in from a low angle as environmental lights wake up around the lead. The lead holds a calm confident expression, natural breathing, tiny eye movement, jacket fabric moving subtly. Motion is elegant and restrained, like a film trailer opening shot.`,
       captionText: `${lead.firstName}, this was built around you.`,
     },
     {
       sceneNumber: 2,
       durationSeconds: 7,
-      objective: "Visualize the missed opportunity",
-      higgsfieldPrompt: `${leadName} studies a sharp visual wall of growth signals, missed opportunities, and buyer attention shifting online. Premium B2B ad style, realistic likeness, cinematic camera movement, no text, no watermark.`,
+      objective: "Storyboard panel 2: impossible-to-ignore market tension",
+      higgsfieldPrompt: `GPT IMAGE 2 STILL / STORYBOARD PANEL:
+Medium/format: cinematic still from a high-concept business sci-fi film, 16:9, photoreal, dense but readable composition.
+Subject/action: ${leadName} studies a surreal physical map of buyer attention: fragmented inboxes, LinkedIn signals, missed meetings, and opportunity paths orbiting the room like holographic architecture. ${company}'s business context should influence the set design without using logos.
+Technical specs: wide establishing shot with strong depth layers, 35mm lens, leading lines toward the lead, realistic perspective.
+Lighting/color: tense contrast, practical office light colliding with cinematic neon accents, volumetric atmosphere.
+Texture/detail: tactile dashboards, glass reflections, believable papers, premium surfaces, realistic human posture.
+Text/typography: no readable text in the image, no fake interface copy.
+Negative constraints: no messy collage, no cheesy AI glow, no stock-photo boardroom, no distorted likeness.
+
+KLING 3.0 MOTION DIRECTION:
+Slow tracking move around the lead as the floating opportunity map rearranges itself. Holographic paths shift softly, reflections glide across glass, the lead turns their gaze with natural weight and focus. No fast cuts, no chaotic motion.`,
       captionText: "Your market is already moving.",
     },
     {
       sceneNumber: 3,
       durationSeconds: 8,
-      objective: "Show the outcome and CTA",
-      higgsfieldPrompt: `${leadName} sees a polished AI-powered outreach engine creating personalized videos and qualified conversations for ${company}. Premium future-of-sales visual, cinematic, realistic, optimistic, no text, no watermark.`,
+      objective: "Storyboard panel 3: transformation and invitation",
+      higgsfieldPrompt: `GPT IMAGE 2 STILL / STORYBOARD PANEL:
+Medium/format: final hero frame from an aspirational commercial film, 16:9, photoreal, cinematic production design.
+Subject/action: ${leadName} watches a cinematic outreach engine come alive: personalized video frames, qualified conversations, and meeting signals forming a luminous path from cold attention to real conversations for ${company}.
+Technical specs: balanced heroic wide shot, elegant foreground depth, clean composition, premium lens rendering.
+Lighting/color: optimistic sunrise-grade light, polished reflections, controlled highlights, rich but natural colors.
+Texture/detail: precise glass, metal, fabric, skin texture, realistic screens with abstract non-readable UI shapes.
+Text/typography: no readable text, no logos, no captions inside image.
+Negative constraints: no generic startup dashboard, no fake words, no watermark, no distorted person.
+
+KLING 3.0 MOTION DIRECTION:
+Camera cranes slightly upward and pushes forward as the light path forms. The lead relaxes into a confident posture; background elements move with realistic physics and subtle parallax. End on a composed, premium final frame.`,
       captionText: "ReachAI turns attention into meetings.",
     },
   ];
@@ -112,9 +143,32 @@ export async function generateCreativeBrief(
     return fallbackBrief(campaign, lead);
   }
 
-  const prompt = `You are ReachAI's cold-outreach creative director.
+  const prompt = `You are ReachAI's chief film director, AI cinematographer, and cold-outreach creative strategist.
 
-Create a 30-second hyper-personalized AI video concept where the lead is the main character. The goal is to impress the lead with quality and likeness, then sell ReachAI's service.
+Create a 24-30 second hyper-personalized AI video where the lead is the main character. This cannot feel like a generic B2B video. It must feel like a miniature film trailer, luxury commercial, or viral cinematic concept made specifically around the lead and their company.
+
+New creative workflow:
+1. Think in one storyboard first: GPT Image 2 can create dense cinematic compositions, photoreal scenes, precise spatial relationships, and rich layout. Design the whole video as a 3-panel movie storyboard.
+2. Then turn each panel into a GPT Image 2 still prompt.
+3. Then turn each still into a Kling 3.0-style image-to-video motion prompt.
+
+Use this GPT Image 2 still prompt structure inside every scene:
+- Medium/format: the world and visual form of the image.
+- Subject/action: the lead as protagonist, using the uploaded photo as actual identity reference.
+- Technical specs: lens, framing, perspective, composition, depth.
+- Lighting/color: atmosphere, mood, color science, practical/mixed lighting.
+- Texture/detail: micro-specific production details.
+- Text/typography: usually no readable text, unless explicitly useful.
+- Negative constraints: cleanup rules.
+
+Use this Kling 3.0 motion structure inside every scene:
+- What moves.
+- Camera behavior.
+- Pacing and motion quality.
+- Environmental changes.
+- Realistic physics / human motion details.
+
+The result must be artful, cinematic, and highly personalized. Think: a Spielberg-level sense of wonder, premium commercial craft, and a sharp sales strategy underneath. Do not copy or name a living director in the output; use professional cinematic language instead.
 
 Client:
 - Name: ${campaign.clientName}
@@ -140,22 +194,22 @@ Research the client and the lead/company. Then return ONLY valid JSON with:
     {
       "scene_number": 1,
       "duration_seconds": 7,
-      "objective": "personalized hook",
-      "higgsfield_prompt": "silent cinematic scene prompt; lead is main character; preserve likeness; premium commercial look; no text/watermark",
+      "objective": "storyboard panel 1: personalized cinematic hook",
+      "higgsfield_prompt": "Include two labeled sections: GPT IMAGE 2 STILL / STORYBOARD PANEL and KLING 3.0 MOTION DIRECTION. Make the still wildly cinematic, personalized, photoreal, dense with meaningful production design, and no watermark. Make the motion direction specific, realistic, and camera-aware.",
       "caption_text": "short on-screen caption"
     },
     {
       "scene_number": 2,
       "duration_seconds": 7,
-      "objective": "pain or missed opportunity",
-      "higgsfield_prompt": "silent cinematic scene prompt",
+      "objective": "storyboard panel 2: tension, pain, or missed opportunity",
+      "higgsfield_prompt": "Include the same two labeled sections. Visualize the business pain as a cinematic metaphor tied to the lead/company. Avoid generic office scenes.",
       "caption_text": "short on-screen caption"
     },
     {
       "scene_number": 3,
       "duration_seconds": 8,
-      "objective": "outcome and CTA",
-      "higgsfield_prompt": "silent cinematic scene prompt",
+      "objective": "storyboard panel 3: transformation and CTA",
+      "higgsfield_prompt": "Include the same two labeled sections. Show the future outcome as a premium cinematic reveal.",
       "caption_text": "short on-screen caption"
     }
   ]
@@ -166,7 +220,13 @@ Rules:
 - Make every scene useful for selling.
 - Do not mention fake facts.
 - Do not make the lead speak. The narrator speaks to the lead.
-- Higgsfield prompts must be visually specific, premium, realistic, and silent.`;
+- Every image prompt must say the uploaded lead photo is the actual identity reference.
+- Make every scene feel impossible to get from a stock template.
+- Prefer photoreal cinematic scenes over plain offices.
+- Strong personalization should come from the lead's role, company, industry, geography, client offer, and business pain.
+- Avoid readable text inside generated images unless absolutely necessary; captions are handled separately.
+- No logos, watermarks, subtitles, fake UI copy, distorted faces, or generic stock-photo business scenes.
+- Kling motion directions should not re-describe every visible object; focus on motion, camera, pacing, and environmental changes.`;
 
   const response = await anthropic.messages.create({
     model: CREATIVE_MODEL,
