@@ -135,6 +135,7 @@ interface DashCampaign {
   status: string;
   scraped: number;
   researched: number;
+  scripts: number;
   videos: number;
   delivered: number;
   created: string;
@@ -200,6 +201,7 @@ function mapCampaign(c: ApiCampaign, index: number): DashCampaign {
     status: CAMPAIGN_STATUS_MAP[c.status] ?? "pending",
     scraped: stats.totalLeads,
     researched: stats.researched,
+    scripts: stats.scriptsDone,
     videos: stats.videosGenerated,
     delivered: stats.emailsSent,
     created: new Date(c.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -317,12 +319,30 @@ export default function Dashboard() {
   const fetchLeads = useCallback(async (campaignId: string) => {
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/status`);
-      const data = await res.json() as { leads?: ApiLead[]; error?: string };
+      const data = await res.json() as {
+        campaign?: ApiCampaign;
+        leads?: ApiLead[];
+        error?: string;
+      };
       if (!res.ok) {
         setDashboardError(data.error ?? "Could not load leads");
         return;
       }
       setActiveLeads((data.leads ?? []).map(mapLead));
+      if (data.campaign) {
+        setActiveCampaign((current) => current
+          ? {
+              ...current,
+              leads: data.campaign?.stats?.totalLeads ?? current.leads,
+              scraped: data.campaign?.stats?.totalLeads ?? current.scraped,
+              researched: data.campaign?.stats?.researched ?? current.researched,
+              scripts: data.campaign?.stats?.scriptsDone ?? current.scripts,
+              videos: data.campaign?.stats?.videosGenerated ?? current.videos,
+              delivered: data.campaign?.stats?.emailsSent ?? current.delivered,
+            }
+          : current
+        );
+      }
       setDashboardError(null);
     } catch (error) {
       setDashboardError(error instanceof Error ? error.message : "Could not load leads");
@@ -350,6 +370,7 @@ export default function Dashboard() {
             ...current,
             leads: data.totalLeads ?? current.leads,
             scraped: data.totalLeads ?? current.scraped,
+            scripts: data.totalLeads !== undefined ? Math.min(current.scripts, data.totalLeads) : current.scripts,
           }
         : current
       );
@@ -442,6 +463,7 @@ export default function Dashboard() {
             ...current,
             leads: data.totalLeads ?? Math.max(0, current.leads - 1),
             scraped: data.totalLeads ?? Math.max(0, current.scraped - 1),
+            scripts: data.totalLeads !== undefined ? Math.min(current.scripts, data.totalLeads) : current.scripts,
           }
         : current
       );
@@ -632,7 +654,7 @@ export default function Dashboard() {
                   const vals = [
                     activeCampaign.scraped,
                     activeCampaign.researched,
-                    activeCampaign.researched,
+                    activeCampaign.scripts,
                     activeCampaign.videos,
                     activeCampaign.delivered,
                   ];
@@ -739,7 +761,16 @@ export default function Dashboard() {
                           />
                         </label>
                         {lead.video ? (
-                          <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px", borderColor: `${G}44`, color: G }}>▶ View</button>
+                          <button
+                            className="pill-btn"
+                            style={{ padding: "4px 10px", fontSize: "10px", borderColor: `${G}44`, color: G }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.location.href = `/creative/${lead.id}`;
+                            }}
+                          >
+                            ▶ View
+                          </button>
                         ) : (
                           <button className="pill-btn" style={{ padding: "4px 10px", fontSize: "10px" }} onClick={(e) => { e.stopPropagation(); window.location.href = `/creative/${lead.id}`; }}>Creative</button>
                         )}
