@@ -92,9 +92,9 @@ export async function POST(
     return NextResponse.json({
       job,
       scenes,
-      mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes),
+      mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes, campaign),
       automationMessage:
-        "The brief is ready and the 3 scene jobs are lined up. As soon as the connected Higgsfield generator starts, this page will switch to creating the stills and videos automatically.",
+        "The brief is ready and the 3 UGC hook scene jobs are lined up. As soon as the connected Higgsfield generator starts, this page will switch to creating the videos automatically.",
       automationMode: "mcp_worker_required",
     });
   } catch (error) {

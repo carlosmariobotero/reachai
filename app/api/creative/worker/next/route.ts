@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
         campaign,
         job: responseJob,
         scenes: workerScenes,
-        mcpTasks: buildHiggsfieldMcpTasks(lead, job, workerScenes),
+        mcpTasks: buildHiggsfieldMcpTasks(lead, job, workerScenes, campaign),
       });
     }
 
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
           campaign,
           job,
           scenes: activeScenes,
-          mcpTasks: buildHiggsfieldMcpTasks(lead, job, activeScenes),
+          mcpTasks: buildHiggsfieldMcpTasks(lead, job, activeScenes, campaign),
           message:
             "A Higgsfield worker already claimed this lead. These scenes are in progress or already finished.",
         });

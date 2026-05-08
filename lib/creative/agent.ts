@@ -38,7 +38,13 @@ function fallbackBrief(campaign: Campaign, lead: Lead): {
       sceneNumber: 1,
       durationSeconds: 10,
       objective: "Cold open: the hidden system reveals itself",
-      higgsfieldPrompt: `GPT IMAGE 2 STILL / STORYBOARD PANEL:
+      higgsfieldPrompt: `MARKETING STUDIO UGC DIRECTION:
+Preset: UGC
+Hook: Product Hit
+Setting: Street
+The first second should feel like a native social ad interruption: a stack of scattered papers or process cards flies into ${leadName}'s path, he catches one calmly, and the moment pivots into the business problem ${campaign.clientName} solves. Keep the lead silent; the narrator will speak to him later. Make it fast, human, and slightly surprising, not slapstick.
+
+GPT IMAGE 2 STILL / STORYBOARD PANEL:
 Big idea: ${leadName} discovers that the invisible operating system behind ${company} has become a real place.
 Medium/format: photoreal cinematic cold-open keyframe, 16:9, premium film look, dramatic but believable.
 Subject/action: using the uploaded lead photo as the actual identity reference, ${leadName} opens an elevator door into ${world}; loose papers, audit trails, and process paths float in a vast architectural space beyond the door.
@@ -56,7 +62,13 @@ KLING 3.0 MOTION DIRECTION:
       sceneNumber: 2,
       durationSeconds: 10,
       objective: "Conflict: scattered work becomes a physical obstacle",
-      higgsfieldPrompt: `GPT IMAGE 2 STILL / STORYBOARD PANEL:
+      higgsfieldPrompt: `MARKETING STUDIO UGC DIRECTION:
+Preset: Product Review
+Hook: Interview
+Setting: Office
+Stage it like a spontaneous office-interview hook: an off-camera interviewer presents the operational chaos as a simple question, and ${leadName} reacts by showing how scattered tools create visible friction around him. Keep it silent and visual, with natural handheld energy and one clear before/after moment.
+
+GPT IMAGE 2 STILL / STORYBOARD PANEL:
 Big idea: the cost of disconnected tools becomes a dramatic obstacle ${leadName} must control.
 Medium/format: cinematic action still from a grounded business-thriller sequence, 16:9, photoreal.
 Subject/action: ${leadName} stands on a narrow glass bridge as folders, inboxes, spreadsheet grids, risk cards, and approval stamps move like a storm around him; he reaches for one glowing process thread that can connect them.
@@ -74,7 +86,13 @@ KLING 3.0 MOTION DIRECTION:
       sceneNumber: 3,
       durationSeconds: 10,
       objective: "Payoff: one system locks into place",
-      higgsfieldPrompt: `GPT IMAGE 2 STILL / STORYBOARD PANEL:
+      higgsfieldPrompt: `MARKETING STUDIO UGC DIRECTION:
+Preset: Tutorial
+Hook: Random Object Mic
+Setting: Roofing
+Turn the final scene into a punchy creator-style payoff: ${leadName} uses an unexpected object as a "mic" for one beat, then the scene reveals the cleaned-up operating system behind him. The joke is visual only; no lip sync, no fake speech. End with a confident silent CTA frame.
+
+GPT IMAGE 2 STILL / STORYBOARD PANEL:
 Big idea: ${leadName} turns the chaos into one visible operating system.
 Medium/format: aspirational cinematic finale keyframe, 16:9, photoreal, premium commercial craft.
 Subject/action: ${leadName} places the glowing process thread into a central glass console; the storm of evidence, risk, audits, and responsibilities forms a clean luminous architecture around the team.
@@ -158,15 +176,16 @@ export async function generateCreativeBrief(
     return fallbackBrief(campaign, lead);
   }
 
-  const prompt = `You are ReachAI's research strategist, story architect, film director, AI cinematographer, and cold-outreach creative lead.
+  const prompt = `You are ReachAI's research strategist, story architect, viral UGC director, AI cinematographer, and cold-outreach creative lead.
 
-Create a 24-30 second hyper-personalized AI video where the lead is the main character. This cannot feel like a generic B2B video, a person in front of dashboards, or a prettier stock office. It must feel like a short film concept made specifically around the lead's role, company, location, and business pressure.
+Create a 24-30 second hyper-personalized AI video where the lead is the main character. This cannot feel like a generic B2B video, a person in front of dashboards, or a prettier stock office. It must feel like a native social hook plus a premium sales story made specifically around the lead's role, company, location, and business pressure.
 
 Internal workflow:
 1. Research lens: identify what is actually specific about the lead. Role tension, company context, geography, industry, public position, and what they personally have to care about.
 2. Story lens: invent one visual metaphor that only makes sense for this lead and client. The metaphor should have a beginning, conflict, and payoff across three scenes.
-3. Cinema lens: make every scene a decisive shot with one strong visual idea, one readable action, and one emotional beat. Use cinematic grammar: cold open, reveal, tension, reversal, transformation, visual payoff, motivated camera, foreground/midground/background depth, practical light, and negative space.
-4. AI generation lens: write prompts that give GPT Image 2 a clean image hierarchy and give Kling 3.0 a real action beat over time.
+3. UGC hook lens: pick a Marketing Studio UGC pattern interrupt that would stop the scroll in the first second, then adapt it to a serious B2B outreach context without making the lead speak.
+4. Cinema lens: make every scene a decisive shot with one strong visual idea, one readable action, and one emotional beat. Use cinematic grammar: cold open, reveal, tension, reversal, transformation, visual payoff, motivated camera, foreground/midground/background depth, practical light, and negative space.
+5. AI generation lens: write prompts that give Higgsfield Marketing Studio a clear UGC hook, give GPT Image 2 a clean fallback image hierarchy, and give Kling 3.0 a real action beat over time.
 
 The difference between good and bad:
 - Bad: "executive in modern office with dashboards."
@@ -175,6 +194,17 @@ The difference between good and bad:
 - Better: one surprising image that makes the business pain instantly understandable.
 - Bad video: "subtle camera push, breathing, lights move."
 - Better video: the person performs an action that changes the world of the scene.
+- Bad UGC: fake influencer speech, generic product review, random stunt unrelated to the lead.
+- Better UGC: a viral hook mechanic that visually reveals the lead's business pressure in one second.
+
+Use this Marketing Studio UGC structure at the top of every scene prompt:
+- Label: MARKETING STUDIO UGC DIRECTION.
+- Preset: choose one of UGC, Product Review, or Tutorial.
+- Hook: choose one of Product Hit, Interview, Random Object Mic, Product Dodge, Epic Fail, or Camera Bump.
+- Setting: choose one of Office, Street, Roofing, In Car, or Nature.
+- Direction: describe the first-second pattern interrupt, the lead's silent action, and how the visual sells the client's outcome.
+- The lead can be the visual avatar, but must not speak; ReachAI adds narrator voiceover later.
+- Keep it B2B-credible even when the hook is surprising.
 
 Use this GPT Image 2 still prompt structure inside every scene:
 - Big idea: one sentence explaining the visual metaphor.
@@ -222,21 +252,21 @@ Research the client and the lead/company. Then return ONLY valid JSON with:
       "scene_number": 1,
       "duration_seconds": 10,
       "objective": "cold open: a surprising personalized hook",
-      "higgsfield_prompt": "Include two labeled sections: GPT IMAGE 2 STILL / STORYBOARD PANEL and KLING 3.0 MOTION DIRECTION. The image must have one clear visual metaphor, one cinematic composition, and one action-ready setup. The motion must include 0-3s, 3-7s, and 7-10s beats where the lead does something meaningful. Treat this as a 10-second source clip that the editor can cut shorter.",
+      "higgsfield_prompt": "Include three labeled sections: MARKETING STUDIO UGC DIRECTION, GPT IMAGE 2 STILL / STORYBOARD PANEL, and KLING 3.0 MOTION DIRECTION. The Marketing Studio section must choose a preset, hook, and setting from the allowed lists and make the first second a scroll-stopping outreach hook. The fallback image must have one clear visual metaphor, one cinematic composition, and one action-ready setup. The motion must include 0-3s, 3-7s, and 7-10s beats where the lead does something meaningful. Treat this as a 10-second source clip that the editor can cut shorter.",
       "caption_text": "short on-screen caption"
     },
     {
       "scene_number": 2,
       "duration_seconds": 10,
       "objective": "conflict: business pain becomes a visual obstacle",
-      "higgsfield_prompt": "Include the same two labeled sections. Visualize the pain as a physical cinematic event that only fits this lead's role/company. Avoid dashboards, generic offices, and object spam. Treat this as a 10-second source clip that the editor can cut shorter.",
+      "higgsfield_prompt": "Include the same three labeled sections. Use the Marketing Studio hook to make the problem immediately visible, then visualize the pain as a physical event that only fits this lead's role/company. Avoid dashboards, generic offices, and object spam. Treat this as a 10-second source clip that the editor can cut shorter.",
       "caption_text": "short on-screen caption"
     },
     {
       "scene_number": 3,
       "duration_seconds": 10,
       "objective": "payoff: transformation and invitation",
-      "higgsfield_prompt": "Include the same two labeled sections. Show the lead taking one decisive action that turns the conflict into the client's promised outcome. End with a premium final frame. Treat this as a 10-second source clip that the editor can cut shorter.",
+      "higgsfield_prompt": "Include the same three labeled sections. Use the Marketing Studio hook as the payoff mechanic, then show the lead taking one decisive action that turns the conflict into the client's promised outcome. End with a premium final frame. Treat this as a 10-second source clip that the editor can cut shorter.",
       "caption_text": "short on-screen caption"
     }
   ]
@@ -245,13 +275,15 @@ Research the client and the lead/company. Then return ONLY valid JSON with:
 Rules:
 - Keep the video under 30 seconds.
 - Make every scene useful for selling.
-- Make the three scenes feel like one connected mini-story, not three separate stock images.
+- Make the three scenes feel like one connected mini-story, not three separate stock images or three unrelated UGC trends.
+- Every scene must include a MARKETING STUDIO UGC DIRECTION section with a selected preset, hook, setting, and silent visual action.
 - Every lead must get a different story concept. Do not reuse the same command-center, boardroom, dashboard, or floating UI idea unless it is uniquely justified.
 - Each scene must have one dominant visual idea. Do not make the image "more cinematic" by adding more objects.
 - Every Kling direction must include a beginning, middle, and end across a 10-second source clip. The lead should take an action that changes the scene.
 - The three generated scene videos are 10-second handles for editing. The final outreach video should still feel like 24-29 seconds, so write the voiceover short enough to fit the cut.
 - Do not mention fake facts.
 - Do not make the lead speak. The narrator speaks to the lead.
+- Do not make the lead lip-sync or pretend to be a creator giving a testimonial.
 - Every image prompt must say the uploaded lead photo is the actual identity reference.
 - Make every scene feel impossible to get from a stock template.
 - Prefer photoreal cinematic story events over plain offices.

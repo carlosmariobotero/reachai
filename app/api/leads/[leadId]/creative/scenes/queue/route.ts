@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildHiggsfieldMcpTasks } from "../../../../../../../lib/creative/higgsfield-mcp";
 import {
   createOrUpdateCreativeVideoJob,
+  getCampaign,
   getCreativeVideoJob,
   getCreativeVideoScenes,
   getLead,
@@ -33,6 +34,8 @@ export async function POST(
       );
     }
 
+    const campaign = await getCampaign(lead.campaignId);
+
     await queueCreativeVideoScenes(leadId);
     const scenes = await getCreativeVideoScenes(leadId);
     await createOrUpdateCreativeVideoJob({
@@ -43,9 +46,9 @@ export async function POST(
 
     return NextResponse.json({
       scenes,
-      mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes),
+      mcpTasks: buildHiggsfieldMcpTasks(lead, job, scenes, campaign ?? undefined),
       automationMessage:
-        "The 3 scene jobs are now waiting to start. Once the connected Higgsfield generator picks them up, this page will change to creating and then fill in each still and video automatically.",
+        "The 3 UGC hook scene jobs are now waiting to start. Once the connected Higgsfield generator picks them up, this page will change to creating and then fill in each video automatically.",
       automationMode: "mcp_worker_required",
     });
   } catch (error) {

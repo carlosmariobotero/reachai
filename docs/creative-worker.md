@@ -15,7 +15,14 @@ The web app cannot directly reuse a Codex or Claude desktop MCP login from Verce
 2. Upload the lead profile photo.
 3. Generate the creative brief.
 4. Click `Run Lead Automation` to generate the creative brief if needed and queue the Higgsfield scene jobs.
-5. For each returned MCP task, use the proven Higgsfield flow:
+5. For each returned MCP task, use the preferred Higgsfield flow:
+   - If `generationMode` is `marketing_studio_ugc`, try Marketing Studio first:
+     - Upload the lead photo to Higgsfield media.
+     - Create/reuse a Marketing Studio avatar for the lead.
+     - Fetch the campaign website as a Marketing Studio `webproduct`.
+     - Generate `marketing_studio_video` with the task's preset, hook id, setting id, and prompt.
+     - Save the generated video URL back to the scene.
+   - If Marketing Studio fails or cannot preserve the lead identity, use the fallback still-to-video path:
    - Upload the lead photo to Higgsfield media.
    - Save the returned `media_id` as `higgsfieldMediaId`.
    - Generate a still image with `model: gpt_image_2`.
@@ -49,12 +56,22 @@ Content-Type: application/json
 When the app queues scenes, it returns `mcpTasks`. Each task includes:
 
 - `leadPhotoUrl`: the uploaded LinkedIn profile photo. This must be passed as an actual image reference to Higgsfield, not rewritten as a text description.
+- `generationMode`: `marketing_studio_ugc` for the new UGC hook workflow, or `cinematic_still_to_video` for the fallback flow.
+- `marketingStudio`: when present, includes `model: marketing_studio_video`, a supported preset, `hookId`, `settingId`, the campaign `productUrl`, an avatar name, and a ready prompt.
 - `imageModel`: `gpt_image_2`.
 - `stillPrompt`: prompt for the identity-preserving still image.
 - `videoPrompt`: prompt for animating the approved still silently.
 - `sceneId`: the Supabase scene id that must be updated when assets are ready.
 
-The worker should process each task like this:
+The worker should process a `marketing_studio_ugc` task like this:
+
+1. Upload `leadPhotoUrl` into Higgsfield MCP media.
+2. Create or reuse a Marketing Studio avatar using the uploaded lead photo.
+3. Fetch the campaign website URL as a Marketing Studio `webproduct`.
+4. Generate a `marketing_studio_video` with the task's preset/mode, hook id, setting id, avatar, webproduct, and prompt.
+5. Patch the scene record with the video job/url and `status: "ready"`.
+
+If Marketing Studio cannot use the avatar/product cleanly, process the same task through the fallback still-to-video path:
 
 1. Upload `leadPhotoUrl` into Higgsfield MCP media.
 2. Generate a GPT Image 2 still using that uploaded media as the image reference.
