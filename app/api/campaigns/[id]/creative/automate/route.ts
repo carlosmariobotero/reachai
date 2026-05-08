@@ -162,7 +162,7 @@ export async function POST(
       message:
         queued > 0
           ? `${queued} photo-ready lead${queued === 1 ? "" : "s"} queued for the Higgsfield worker.`
-          : "No new photo-ready leads were queued.",
+          : "No new leads were queued. They are either already waiting/generated, or they still need a profile photo.",
     });
   } catch (error) {
     console.error("Error starting campaign creative automation:", error);

@@ -298,6 +298,13 @@ export default function CreativeLeadPage() {
   const hasQueuedScenes = queuedScenes > 0;
   const hasGeneratingScenes = generatingScenes > 0;
   const hasActiveSceneRun = hasQueuedScenes || hasGeneratingScenes;
+  const hasCompletedSceneRun =
+    readyScenes >= 3 ||
+    data.job?.status === "scenes_ready" ||
+    data.job?.status === "voiceover_ready" ||
+    data.job?.status === "render_ready" ||
+    data.job?.status === "approved";
+  const hasProtectedSceneRun = hasActiveSceneRun || hasCompletedSceneRun;
   const hasScenePlan = data.scenes.length > 0;
 
   const friendlyStatus = hasGeneratingScenes
@@ -374,8 +381,16 @@ export default function CreativeLeadPage() {
             }}
           >
             <input className="input" type="file" name="photo" accept="image/png,image/jpeg,image/webp" required />
-            <button className="button" style={{ marginTop: "12px", width: "100%" }} disabled={!!busy || hasActiveSceneRun}>
-              {busy === "photo" ? "Starting..." : hasActiveSceneRun ? "Generation Already Running" : "Upload Photo + Queue"}
+            <button className="button" style={{ marginTop: "12px", width: "100%" }} disabled={!!busy || hasProtectedSceneRun}>
+              {busy === "photo"
+                ? "Starting..."
+                : hasGeneratingScenes
+                  ? "Generation Running"
+                  : hasQueuedScenes
+                    ? "Already Queued"
+                    : hasCompletedSceneRun
+                      ? "Video Already Created"
+                      : "Upload Photo + Start Automation"}
             </button>
           </form>
         </section>
@@ -393,7 +408,7 @@ export default function CreativeLeadPage() {
                 </button>
                 <button
                   className="button"
-                  disabled={!!busy || !data.lead.profilePhotoUrl || hasGeneratingScenes}
+                  disabled={!!busy || !data.lead.profilePhotoUrl || hasProtectedSceneRun}
                   onClick={() => post(
                     `/api/leads/${leadId}/creative/automate`,
                     "automate",
@@ -401,7 +416,15 @@ export default function CreativeLeadPage() {
                     { "Content-Type": "application/json" }
                   )}
                 >
-                  {busy === "automate" ? "Starting..." : hasGeneratingScenes ? "Generation In Progress" : "Run Lead Automation"}
+                  {busy === "automate"
+                    ? "Starting..."
+                    : hasGeneratingScenes
+                      ? "Generation In Progress"
+                      : hasQueuedScenes
+                        ? "Already Waiting For Higgsfield"
+                        : hasCompletedSceneRun
+                          ? "Video Already Created"
+                          : "Run Lead Automation"}
                 </button>
               </div>
             </div>
@@ -435,8 +458,16 @@ export default function CreativeLeadPage() {
                   {readyScenes} / 3 animated scene videos ready · {generatingScenes} generating · {queuedScenes} waiting
                 </p>
               </div>
-              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job || !hasScenePlan || hasActiveSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>
-                {busy === "scenes" ? "Queueing..." : hasGeneratingScenes ? "Higgsfield Is Generating" : hasQueuedScenes ? "Already Waiting For Higgsfield" : "Queue Higgsfield Automation"}
+              <button className="button" disabled={!!busy || !data.lead.profilePhotoUrl || !data.job || !hasScenePlan || hasProtectedSceneRun} onClick={() => post(`/api/leads/${leadId}/creative/scenes/queue`, "scenes")}>
+                {busy === "scenes"
+                  ? "Queueing..."
+                  : hasGeneratingScenes
+                    ? "Higgsfield Is Generating"
+                    : hasQueuedScenes
+                      ? "Already Waiting For Higgsfield"
+                      : hasCompletedSceneRun
+                        ? "Video Already Created"
+                        : "Queue Higgsfield Automation"}
               </button>
             </div>
 
